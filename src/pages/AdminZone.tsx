@@ -1,0 +1,219 @@
+import React, { useState } from 'react';
+import { useApp } from '../context/AppContext';
+import { ShieldCheck, UserPlus, ChevronDown, ChevronUp, Lock, CheckCircle2, Circle, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { User, UserRole, UserPermissions } from '../types';
+import { cn } from '../lib/utils';
+import { ConfirmModal } from '../components/ui/ConfirmModal';
+
+const PermissionToggle = ({ 
+  label, 
+  value, 
+  onChange 
+}: { 
+  label: string, 
+  value: boolean, 
+  onChange: (val: boolean) => void 
+}) => (
+  <div 
+    onClick={() => onChange(!value)}
+    className="flex items-center justify-between p-2 rounded-lg border border-slate-100 hover:bg-slate-100 transition-colors cursor-pointer"
+  >
+    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tighter">{label}</span>
+    <div className={cn(
+      "w-8 h-4.5 rounded-full relative transition-colors",
+      value ? "bg-sky-400" : "bg-slate-300"
+    )}>
+      <div className={cn(
+        "absolute top-0.5 w-3.5 h-3.5 bg-white rounded-full transition-all shadow-sm shadow-black/10",
+        value ? "right-0.5" : "left-0.5"
+      )} />
+    </div>
+  </div>
+);
+
+const UserRow = ({ user, isAdmin, onDelete }: { user: User, isAdmin: boolean, onDelete: (id: string) => void, key?: string }) => {
+  const { updateUserPermissions, resetUserPin, currentUser } = useApp();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [newPin, setNewPin] = useState('');
+
+  const handlePermissionChange = (key: keyof UserPermissions, val: boolean) => {
+    updateUserPermissions(user.id, { ...user.permissions, [key]: val });
+  };
+
+  const handleResetPin = () => {
+    if (newPin) {
+      resetUserPin(user.id, newPin);
+      setNewPin('');
+      alert('PIN uspješno resetiran!');
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-3 shadow-sm">
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center font-bold text-white text-[10px] border border-white/10 shrink-0">
+            {user.username[0].toUpperCase()}
+          </div>
+          <div>
+            <p className="font-bold text-slate-800 text-[13px]">{user.username}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+               <span className={cn(
+                 "px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest",
+                 user.role === UserRole.ADMIN ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"
+               )}>
+                 {user.role === UserRole.ADMIN ? 'Admin' : 'Member'}
+               </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          {user.role !== UserRole.ADMIN && user.id !== currentUser?.id && (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(user.id);
+              }}
+              className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+              title="Izbriši korisnika"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-t border-slate-100 bg-slate-50/30"
+          >
+            <div className="p-4">
+               <div className="mb-4">
+                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                    <PermissionToggle label="Kredit" value={user.permissions.kredit} onChange={(v) => handlePermissionChange('kredit', v)} />
+                    <PermissionToggle label="Uplate" value={user.permissions.uplate} onChange={(v) => handlePermissionChange('uplate', v)} />
+                    <PermissionToggle label="Uštede" value={user.permissions.ustede} onChange={(v) => handlePermissionChange('ustede', v)} />
+                    <PermissionToggle label="Materijali" value={user.permissions.materijali} onChange={(v) => handlePermissionChange('materijali', v)} />
+                    <PermissionToggle label="Dostava" value={user.permissions.dostava} onChange={(v) => handlePermissionChange('dostava', v)} />
+                    <PermissionToggle label="Radovi" value={user.permissions.radovi} onChange={(v) => handlePermissionChange('radovi', v)} />
+                    <PermissionToggle label="Kategorije" value={user.permissions.kategorije} onChange={(v) => handlePermissionChange('kategorije', v)} />
+                    <PermissionToggle label="Izvješća" value={user.permissions.izvjesca} onChange={(v) => handlePermissionChange('izvjesca', v)} />
+                    <PermissionToggle label="Admin Zona" value={user.permissions.adminZona} onChange={(v) => handlePermissionChange('adminZona', v)} />
+                    <PermissionToggle label="Backup" value={user.permissions.backup} onChange={(v) => handlePermissionChange('backup', v)} />
+                 </div>
+               </div>
+
+               {user.role !== UserRole.ADMIN && (
+                 <div className="border-t border-slate-200 pt-4 mt-4 flex gap-4 items-end">
+                    <div className="flex-1 max-w-xs">
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1 leading-none uppercase tracking-tighter">Sigurnost: Resetiraj PIN</label>
+                      <input 
+                        type="text"
+                        value={newPin}
+                        onChange={e => setNewPin(e.target.value)}
+                        placeholder="Novi PIN"
+                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 font-mono text-[13px] focus:ring-2 focus:ring-sky-500/20 outline-none transition-all shadow-sm"
+                      />
+                    </div>
+                    <button 
+                      onClick={handleResetPin}
+                      className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 transition-all shrink-0"
+                    >
+                      Resetirati
+                    </button>
+                 </div>
+               )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default function AdminZone() {
+  const { state, addUser, deleteUser } = useApp();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [newName, setNewName] = useState('');
+  const [newPin, setNewPin] = useState('');
+
+  const handleAddMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    addUser(newName, newPin);
+    setIsModalOpen(false);
+    setNewName('');
+    setNewPin('');
+  };
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-black text-slate-900 tracking-tight">ADMIN ZONA</h1>
+          <p className="text-xs text-slate-500 font-medium tracking-wide">Upravljanje članovima tima i dozvolama</p>
+        </div>
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-5 rounded-lg text-xs shadow-sm transition-all flex items-center gap-2"
+        >
+          <UserPlus className="w-4 h-4" />
+          Dodaj člana
+        </button>
+      </header>
+
+      <div className="flex flex-col gap-1">
+        <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Članovi projekta</h2>
+        {state.users.map(u => (
+          <UserRow key={u.id} user={u} isAdmin={u.role === UserRole.ADMIN} onDelete={setConfirmDeleteId} />
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-8">
+              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                 <UserPlus className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-6 text-center">Dodaj novog člana</h2>
+              <form onSubmit={handleAddMember} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Ime i prezime / Korisničko ime</label>
+                  <input required value={newName} onChange={e => setNewName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Početni PIN</label>
+                  <input required value={newPin} onChange={e => setNewPin(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono" placeholder="npr. 4455" />
+                  <p className="mt-2 text-xs text-slate-400">PIN može sadržavati slova i brojeve.</p>
+                </div>
+                <div className="flex gap-4 pt-4">
+                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-all">Odustani</button>
+                   <button type="submit" className="flex-[2] py-4 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">Dodaj člana</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <ConfirmModal 
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => confirmDeleteId && deleteUser(confirmDeleteId)}
+        title="Izbriši člana tima?"
+        message="Jeste li sigurni da želite izbrisati ovog člana? Osoba više neće imati pristup projektu."
+      />
+    </div>
+  );
+}

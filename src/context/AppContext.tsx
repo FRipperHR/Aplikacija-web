@@ -1,0 +1,480 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { AppState, User, UserRole, UserPermissions, Category, Material, Delivery, Work, Saving, Payment } from '../types';
+
+interface AppContextType {
+  state: AppState;
+  isLoading: boolean;
+  currentUser: User | null;
+  login: (username: string, identifier: string) => boolean;
+  logout: () => void;
+  updateMemberPin: (userId: string, newPin: string) => void;
+  
+  // State mutations
+  addUser: (name: string, pin: string) => void;
+  updateUserPermissions: (userId: string, permissions: UserPermissions) => void;
+  resetUserPin: (userId: string, newPin: string) => void;
+  deleteUser: (userId: string) => void;
+  
+  addCategory: (name: string) => void;
+  updateCategory: (id: string, name: string) => void;
+  deleteCategory: (id: string) => void;
+  
+  addMaterial: (material: Omit<Material, 'id'>) => void;
+  updateMaterial: (id: string, material: Partial<Material>) => void;
+  deleteMaterial: (id: string) => void;
+  
+  addDelivery: (delivery: Omit<Delivery, 'id'>) => void;
+  updateDelivery: (id: string, delivery: Partial<Delivery>) => void;
+  deleteDelivery: (id: string) => void;
+  
+  addWork: (work: Omit<Work, 'id'>) => void;
+  updateWork: (id: string, work: Partial<Work>) => void;
+  deleteWork: (id: string) => void;
+  
+  addSaving: (saving: Omit<Saving, 'id'>) => void;
+  updateSaving: (id: string, saving: Partial<Saving>) => void;
+  deleteSaving: (id: string) => void;
+  
+  addPayment: (payment: Omit<Payment, 'id'>) => void;
+  updatePayment: (id: string, payment: Partial<Payment>) => void;
+  deletePayment: (id: string) => void;
+  setLoanTarget: (amount: number) => void;
+  createSnapshot: (note: string) => void;
+  deleteSnapshot: (id: string) => void;
+  
+  importData: (jsonData: string) => boolean;
+  exportData: () => string;
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+const DEFAULT_PERMISSIONS: UserPermissions = {
+  kredit: true,
+  uplate: true,
+  ustede: true,
+  materijali: true,
+  dostava: true,
+  radovi: true,
+  kategorije: true,
+  izvjesca: true,
+  adminZona: false,
+  backup: false,
+};
+
+const INITIAL_STATE: AppState = {
+  users: [
+    {
+      id: 'admin-1',
+      username: 'josip',
+      pin: 'admin123',
+      role: UserRole.ADMIN,
+      permissions: { ...DEFAULT_PERMISSIONS, adminZona: true, backup: true },
+    },
+  ],
+  categories: [
+    { id: '1', name: 'Kuhinja' },
+    { id: '2', name: 'Kupaonica' },
+    { id: '3', name: 'Dnevni boravak' },
+  ],
+  materials: [],
+  deliveries: [],
+  works: [],
+  savings: [],
+  payments: [],
+};
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [state, setInternalState] = useState<AppState>(INITIAL_STATE);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const setState: typeof setInternalState = useCallback((updater) => {
+    setInternalState(prev => {
+      const next = typeof updater === 'function' ? (updater as any)(prev) : updater;
+      
+      const dataChanged = 
+        prev.materials !== next.materials ||
+        prev.deliveries !== next.deliveries ||
+        prev.works !== next.works ||
+        prev.savings !== next.savings ||
+        prev.payments !== next.payments ||
+        prev.categories !== next.categories ||
+        prev.users !== next.users ||
+        prev.loanTarget !== next.loanTarget;
+        
+      // Ensure we don't accidentally override an explicitly set lastModified
+      if (dataChanged && (!next.lastModified || next.lastModified === prev.lastModified)) {
+         return { ...next, lastModified: new Date().toISOString() };
+      }
+      return next;
+    });
+  }, []);
+
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const savedUser = sessionStorage.getItem('renovacija_current_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
+  // Load state from API on mount
+  useEffect(() => {
+    const fetchState = async () => {
+      try {
+        const response = await fetch('/api/state');
+        if (response.ok) {
+          const data = await response.json();
+          setState(data);
+        } else {
+          // Fallback to localStorage if API fails (e.g. no data yet)
+          const saved = localStorage.getItem('renovacija_app_state');
+          if (saved) setState(JSON.parse(saved));
+        }
+      } catch (error) {
+        console.error('Failed to fetch state:', error);
+        const saved = localStorage.getItem('renovacija_app_state');
+        if (saved) setState(JSON.parse(saved));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchState();
+  }, []);
+
+  // Save state to API and localStorage when it changes
+  useEffect(() => {
+    if (isLoading) return;
+
+    localStorage.setItem('renovacija_app_state', JSON.stringify(state));
+    
+    const saveState = async () => {
+      try {
+        await fetch('/api/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state),
+        });
+      } catch (error) {
+        console.error('Failed to save state to API:', error);
+      }
+    };
+
+    const timeoutId = setTimeout(saveState, 1000); // Debounce save
+    return () => clearTimeout(timeoutId);
+  }, [state, isLoading]);
+
+  useEffect(() => {
+    if (currentUser) {
+      sessionStorage.setItem('renovacija_current_user', JSON.stringify(currentUser));
+    } else {
+      sessionStorage.removeItem('renovacija_current_user');
+    }
+  }, [currentUser]);
+
+  const login = (username: string, identifier: string) => {
+    const user = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+    if (user && user.pin === identifier) {
+      setCurrentUser(user);
+      return true;
+    }
+    return false;
+  };
+
+  const logout = () => setCurrentUser(null);
+
+  const updateMemberPin = (userId: string, newPin: string) => {
+    setState(prev => ({
+      ...prev,
+      users: prev.users.map(u => u.id === userId ? { ...u, pin: newPin } : u)
+    }));
+    if (currentUser?.id === userId) {
+      setCurrentUser(prev => prev ? { ...prev, pin: newPin } : null);
+    }
+  };
+
+  const addUser = (name: string, pin: string) => {
+    const newUser: User = {
+      id: Date.now().toString(),
+      username: name,
+      pin,
+      role: UserRole.MEMBER,
+      permissions: { ...DEFAULT_PERMISSIONS },
+    };
+    setState(prev => ({ ...prev, users: [...prev.users, newUser] }));
+  };
+
+  const updateUserPermissions = (userId: string, permissions: UserPermissions) => {
+    setState(prev => ({
+      ...prev,
+      users: prev.users.map(u => u.id === userId ? { ...u, permissions } : u)
+    }));
+  };
+
+  const resetUserPin = (userId: string, newPin: string) => {
+    setState(prev => ({
+      ...prev,
+      users: prev.users.map(u => u.id === userId ? { ...u, pin: newPin } : u)
+    }));
+  };
+
+  const deleteUser = (userId: string) => {
+    setState(prev => ({
+      ...prev,
+      users: prev.users.filter(u => u.id !== userId)
+    }));
+  };
+
+  const addCategory = (name: string) => {
+    setState(prev => ({
+      ...prev,
+      categories: [...prev.categories, { id: Date.now().toString(), name }]
+    }));
+  };
+
+  const updateCategory = (id: string, name: string) => {
+    setState(prev => ({
+      ...prev,
+      categories: prev.categories.map(c => c.id === id ? { ...c, name } : c)
+    }));
+  };
+
+  const deleteCategory = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      categories: prev.categories.filter(c => c.id !== id)
+    }));
+  };
+
+  // Synchronization Logic for Materials
+  const syncMaterialArtifacts = (material: Material, oldMaterial?: Material) => {
+    setState(prev => {
+      let nextDeliveries = [...prev.deliveries];
+      let nextWorks = [...prev.works];
+      let nextSavings = [...prev.savings];
+
+      // Handle Delivery
+      if (material.deliveryCost > 0) {
+        const existingDeliveryIdx = nextDeliveries.findIndex(d => d.materialIds.includes(material.id));
+        if (existingDeliveryIdx > -1) {
+          nextDeliveries[existingDeliveryIdx] = {
+            ...nextDeliveries[existingDeliveryIdx],
+            amount: material.deliveryCost,
+            name: `Dostava: ${material.name}`
+          };
+        } else {
+          nextDeliveries.push({
+            id: `del-${material.id}`,
+            name: `Dostava: ${material.name}`,
+            amount: material.deliveryCost,
+            materialIds: [material.id]
+          });
+        }
+      } else {
+        nextDeliveries = nextDeliveries.filter(d => !d.materialIds.includes(material.id) || d.materialIds.length > 1);
+        // If it was linked to multiple, we should just remove this material ID from it
+        nextDeliveries = nextDeliveries.map(d => ({
+          ...d,
+          materialIds: d.materialIds.filter(mid => mid !== material.id)
+        })).filter(d => d.materialIds.length > 0 || d.amount > 0);
+      }
+
+      // Handle Work
+      if (material.workCost > 0) {
+        const existingWorkIdx = nextWorks.findIndex(w => w.materialIds.includes(material.id));
+        if (existingWorkIdx > -1) {
+          nextWorks[existingWorkIdx] = {
+            ...nextWorks[existingWorkIdx],
+            amount: material.workCost,
+            name: `Radovi: ${material.name}`
+          };
+        } else {
+          nextWorks.push({
+            id: `work-${material.id}`,
+            name: `Radovi: ${material.name}`,
+            amount: material.workCost,
+            materialIds: [material.id]
+          });
+        }
+      } else {
+        nextWorks = nextWorks.map(w => ({
+          ...w,
+          materialIds: w.materialIds.filter(mid => mid !== material.id)
+        })).filter(w => w.materialIds.length > 0 || w.amount > 0);
+      }
+
+      // Handle Auto Saving
+      const savingAmount = material.plannedCost - material.actualPaid;
+      if (savingAmount !== 0) {
+        const existingSavingIdx = nextSavings.findIndex(s => s.materialId === material.id && s.isAuto);
+        if (existingSavingIdx > -1) {
+          nextSavings[existingSavingIdx] = {
+            ...nextSavings[existingSavingIdx],
+            amount: savingAmount,
+            name: `Ušteda: ${material.name}`
+          };
+        } else {
+          nextSavings.push({
+            id: `sav-${material.id}`,
+            name: `Ušteda: ${material.name}`,
+            amount: savingAmount,
+            materialId: material.id,
+            isAuto: true
+          });
+        }
+      } else {
+        nextSavings = nextSavings.filter(s => s.materialId !== material.id);
+      }
+
+      return {
+        ...prev,
+        deliveries: nextDeliveries,
+        works: nextWorks,
+        savings: nextSavings
+      };
+    });
+  };
+
+  const addMaterial = (m: Omit<Material, 'id'>) => {
+    const id = Date.now().toString();
+    const newMaterial = { ...m, id };
+    setState(prev => ({
+      ...prev,
+      materials: [...prev.materials, newMaterial]
+    }));
+    syncMaterialArtifacts(newMaterial);
+  };
+
+  const updateMaterial = (id: string, updates: Partial<Material>) => {
+    setState(prev => {
+      const updatedMaterials = prev.materials.map(m => m.id === id ? { ...m, ...updates } : m);
+      const updatedMaterial = updatedMaterials.find(m => m.id === id);
+      if (updatedMaterial) {
+        // We delay sync to next tick or handle it within setState correctly
+        // Since we are inside setState, we need to be careful.
+        // Actually, let's update materials first then call sync outside or use a more functional approach
+        return { ...prev, materials: updatedMaterials };
+      }
+      return prev;
+    });
+    
+    // Sync after state update to access latest values
+    setTimeout(() => {
+      const latestMaterial = state.materials.find(m => m.id === id);
+      if (latestMaterial) syncMaterialArtifacts({ ...latestMaterial, ...updates });
+    }, 0);
+  };
+
+  const deleteMaterial = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      materials: prev.materials.filter(m => m.id !== id),
+      deliveries: prev.deliveries.map(d => ({ ...d, materialIds: d.materialIds.filter(mid => mid !== id) })).filter(d => d.materialIds.length > 0 || d.id.startsWith('manual')),
+      works: prev.works.map(w => ({ ...w, materialIds: w.materialIds.filter(mid => mid !== id) })).filter(w => w.materialIds.length > 0 || w.id.startsWith('manual')),
+      savings: prev.savings.filter(s => s.materialId !== id)
+    }));
+  };
+
+  const addDelivery = (d: Omit<Delivery, 'id'>) => {
+    setState(prev => ({ ...prev, deliveries: [...prev.deliveries, { ...d, id: `manual-${Date.now()}` }] }));
+  };
+  const updateDelivery = (id: string, updates: Partial<Delivery>) => {
+    setState(prev => ({ ...prev, deliveries: prev.deliveries.map(d => d.id === id ? { ...d, ...updates } : d) }));
+  };
+  const deleteDelivery = (id: string) => {
+    setState(prev => ({ ...prev, deliveries: prev.deliveries.filter(d => d.id !== id) }));
+  };
+
+  const addWork = (w: Omit<Work, 'id'>) => {
+    setState(prev => ({ ...prev, works: [...prev.works, { ...w, id: `manual-${Date.now()}` }] }));
+  };
+  const updateWork = (id: string, updates: Partial<Work>) => {
+    setState(prev => ({ ...prev, works: prev.works.map(w => w.id === id ? { ...w, ...updates } : w) }));
+  };
+  const deleteWork = (id: string) => {
+    setState(prev => ({ ...prev, works: prev.works.filter(w => w.id !== id) }));
+  };
+
+  const addSaving = (s: Omit<Saving, 'id'>) => {
+    setState(prev => ({ ...prev, savings: [...prev.savings, { ...s, id: `manual-${Date.now()}` }] }));
+  };
+  const updateSaving = (id: string, updates: Partial<Saving>) => {
+    setState(prev => ({ ...prev, savings: prev.savings.map(s => s.id === id ? { ...s, ...updates } : s) }));
+  };
+  const deleteSaving = (id: string) => {
+    setState(prev => ({ ...prev, savings: prev.savings.filter(s => s.id !== id) }));
+  };
+
+  const addPayment = (p: Omit<Payment, 'id'>) => {
+    setState(prev => ({ ...prev, payments: [...prev.payments, { ...p, id: Date.now().toString() }] }));
+  };
+  const updatePayment = (id: string, updates: Partial<Payment>) => {
+    setState(prev => ({ ...prev, payments: prev.payments.map(p => p.id === id ? { ...p, ...updates } : p) }));
+  };
+  const deletePayment = (id: string) => {
+    setState(prev => ({ ...prev, payments: prev.payments.filter(p => p.id !== id) }));
+  };
+
+  const setLoanTarget = (amount: number) => {
+    setState(prev => ({ ...prev, loanTarget: amount }));
+  };
+
+  const createSnapshot = (note: string) => {
+    const data = JSON.stringify(state);
+    const newSnapshot = {
+      id: crypto.randomUUID(),
+      date: new Date().toISOString(),
+      note,
+      data
+    };
+    setState(prev => ({
+      ...prev,
+      snapshots: [newSnapshot, ...(prev.snapshots || [])].slice(0, 5) // Keep last 5
+    }));
+  };
+
+  const deleteSnapshot = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      snapshots: (prev.snapshots || []).filter(s => s.id !== id)
+    }));
+  };
+
+  const importData = (jsonData: string) => {
+    try {
+      const data = JSON.parse(jsonData);
+      if (data.users && data.categories) {
+        setState(data);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const exportData = () => {
+    setInternalState(prev => ({ ...prev, lastSynced: new Date().toISOString() }));
+    return JSON.stringify(state, null, 2);
+  };
+
+  return (
+    <AppContext.Provider value={{
+      state, isLoading, currentUser, login, logout, updateMemberPin,
+      addUser, updateUserPermissions, resetUserPin, deleteUser,
+      addCategory, updateCategory, deleteCategory,
+      addMaterial, updateMaterial, deleteMaterial,
+      addDelivery, updateDelivery, deleteDelivery,
+      addWork, updateWork, deleteWork,
+      addSaving, updateSaving, deleteSaving,
+      addPayment, updatePayment, deletePayment,
+      setLoanTarget,
+      createSnapshot, deleteSnapshot,
+      importData, exportData
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) throw new Error('useApp must be used within AppProvider');
+  return context;
+};
