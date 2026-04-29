@@ -1,5 +1,5 @@
 <div align="center">
-<img width="1200" height="475" alt="Photo" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6](https://www.simpalm.com/wp-content/uploads/Web-Application.webp](https://simpalm.com/wp-content/uploads/Web-Application.webp" />
+<img width="1200" height="475" alt="Photo" src="https://cwatch.comodo.com/images/what-is-web-app.png" />
 </div>
 
 # Run and deploy your synology app
