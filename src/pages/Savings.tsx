@@ -7,7 +7,8 @@ import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { Saving as SavingType } from '../types';
 
 export default function Savings() {
-  const { state, addSaving, updateSaving, deleteSaving } = useApp();
+  const { state, addSaving, updateSaving, deleteSaving, hasWriteAccess } = useApp();
+  const canEdit = hasWriteAccess('ustede');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -55,13 +56,13 @@ export default function Savings() {
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Uštede</h1>
           <p className="text-slate-500 mt-1 font-medium">Pregled automatskih i ručno unesenih ušteda na projektu</p>
         </div>
-        <button 
+        {canEdit && ( <button 
           onClick={handleOpenAdd}
           className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-2xl shadow-lg shadow-emerald-100 transition-all flex items-center gap-2 active:scale-95"
         >
           <Plus className="w-5 h-5" />
           Nova ušteda
-        </button>
+        </button> )}
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -88,7 +89,7 @@ export default function Savings() {
                    )}>
                       <PiggyBank className="w-6 h-6" />
                    </div>
-                   {!s.isAuto && (
+                   {!s.isAuto && canEdit && (
                      <div className="flex items-center gap-2 transition-opacity">
                         <button 
                           onClick={() => handleOpenEdit(s)}

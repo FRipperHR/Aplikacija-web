@@ -8,7 +8,8 @@ import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { Work as WorkType } from '../types';
 
 export default function Works() {
-  const { state, addWork, updateWork, deleteWork } = useApp();
+  const { state, addWork, updateWork, deleteWork, hasWriteAccess } = useApp();
+  const canEdit = hasWriteAccess('radovi');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -51,13 +52,13 @@ export default function Works() {
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Radovi</h1>
           <p className="text-slate-500 mt-1 font-medium">Pregled i upravljanje troškovima rada</p>
         </div>
-        <button 
+        {canEdit && ( <button 
           onClick={handleOpenAdd}
           className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-2xl shadow-lg shadow-slate-200 transition-all flex items-center gap-2 active:scale-95"
         >
           <Plus className="w-5 h-5" />
           Novi radovi
-        </button>
+        </button> )}
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -80,20 +81,22 @@ export default function Works() {
                    <div className="p-3 bg-slate-100 text-slate-600 rounded-2xl">
                       <Hammer className="w-6 h-6" />
                    </div>
-                   <div className="flex items-center gap-2 transition-opacity">
-                      <button 
-                        onClick={() => handleOpenEdit(w)}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => setConfirmDeleteId(w.id)}
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                   </div>
+                   {canEdit && (
+                     <div className="flex items-center gap-2 transition-opacity">
+                        <button 
+                          onClick={() => handleOpenEdit(w)}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => setConfirmDeleteId(w.id)}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                     </div>
+                   )}
                 </div>
                 
                 <h3 className="font-bold text-slate-900 mb-1">{w.name}</h3>

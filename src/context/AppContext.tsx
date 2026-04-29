@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { AppState, User, UserRole, UserPermissions, Category, Material, Delivery, Work, Saving, Payment, UIConfig, AuditLog } from '../types';
+import { AppState, User, UserRole, UserPermissions, Category, Material, Delivery, Work, Saving, Payment, AuditLog, AppModule } from '../types';
 
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -47,9 +47,8 @@ interface AppContextType {
   
   importData: (jsonData: string) => boolean;
   exportData: () => string;
-  updateUIConfig: (config: Partial<UIConfig>) => void;
   addAuditLog: (action: AuditLog['action'], entity: AuditLog['entity'], details: string) => void;
-  hasWriteAccess: (categoryIds?: string[]) => boolean;
+  hasWriteAccess: (moduleName: AppModule) => boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -89,11 +88,6 @@ const INITIAL_STATE: AppState = {
   works: [],
   savings: [],
   payments: [],
-  uiConfig: {
-    welcomeTitle: 'Dobrodošli u sustav',
-    welcomeSubtitle: 'Praćenje troškova adaptacije i renovacije',
-    appName: 'Apartman troškovnik',
-  },
   auditLogs: [],
 };
 
@@ -210,13 +204,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser]);
 
-  const updateUIConfig = (newConfig: Partial<UIConfig>) => {
-    setState(prev => ({
-      ...prev,
-      uiConfig: { ...(prev.uiConfig || INITIAL_STATE.uiConfig!), ...newConfig }
-    }));
-  };
-
   const login = (username: string, identifier: string) => {
     const user = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
     if (user && user.pin === identifier) {
@@ -276,18 +263,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [currentUser, setState]);
 
-  const hasWriteAccess = useCallback((categoryIds?: string[]) => {
+  const hasWriteAccess = useCallback((moduleName: AppModule) => {
     if (!currentUser) return false;
     if (currentUser.role === UserRole.ADMIN) return true;
     if (!currentUser.permissions.readOnly) return true;
     
-    // If user is readOnly, check if they have specific write access to ALL provided categories
-    if (currentUser.permissions.allowedWriteCategories && currentUser.permissions.allowedWriteCategories.length > 0) {
-      if (!categoryIds || categoryIds.length === 0) {
-        // Uncategorized items cannot be modified if strictly readOnly
-        return false;
-      }
-      return categoryIds.every(id => currentUser.permissions.allowedWriteCategories!.includes(id));
+    // If user is readOnly, check if they have specific write access to this module
+    if (currentUser.permissions.allowedWriteModules && currentUser.permissions.allowedWriteModules.includes(moduleName)) {
+      return true;
     }
     
     return false;
@@ -446,7 +429,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addMaterial = (m: Omit<Material, 'id'>) => {
-    if (!hasWriteAccess([m.categoryId])) return;
+    if (!hasWriteAccess('materijali')) return;
     const id = Date.now().toString();
     const newMaterial = { ...m, id };
     setState(prev => ({
@@ -460,8 +443,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateMaterial = (id: string, updates: Partial<Material>) => {
     const mat = state.materials.find(m => m.id === id);
     if (!mat) return;
-    if (!hasWriteAccess([mat.categoryId])) return;
-    if (updates.categoryId && updates.categoryId !== mat.categoryId && !hasWriteAccess([updates.categoryId])) return;
+    if (!hasWriteAccess('materijali')) return;
 
     setState(prev => {
       const updatedMaterials = prev.materials.map(m => m.id === id ? { ...m, ...updates } : m);
@@ -477,7 +459,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteMaterial = (id: string) => {
     const mat = state.materials.find(m => m.id === id);
     if (!mat) return;
-    if (!hasWriteAccess([mat.categoryId])) return;
+    if (!hasWriteAccess('materijali')) return;
 
     setState(prev => ({
       ...prev,
@@ -489,20 +471,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addAuditLog('DELETE', 'MATERIAL', `Obrisan materijal: ${mat.name}`);
   };
 
-  const getCategoriesForMaterials = (materialIds: string[]) => {
-    return Array.from(new Set(state.materials.filter(m => materialIds.includes(m.id)).map(m => m.categoryId)));
-  };
-
   const addDelivery = (d: Omit<Delivery, 'id'>) => {
-    if (!hasWriteAccess(getCategoriesForMaterials(d.materialIds || []))) return;
+    if (!hasWriteAccess('dostava')) return;
     setState(prev => ({ ...prev, deliveries: [...prev.deliveries, { ...d, id: `manual-${Date.now()}` }] }));
     addAuditLog('CREATE', 'DELIVERY', `Dodana dostava: ${d.name}`);
   };
   const updateDelivery = (id: string, updates: Partial<Delivery>) => {
     const del = state.deliveries.find(d => d.id === id);
     if (!del) return;
-    if (!hasWriteAccess(getCategoriesForMaterials(del.materialIds || []))) return;
-    if (updates.materialIds && !hasWriteAccess(getCategoriesForMaterials(updates.materialIds))) return;
+    if (!hasWriteAccess('dostava')) return;
     
     setState(prev => ({ ...prev, deliveries: prev.deliveries.map(d => d.id === id ? { ...d, ...updates } : d) }));
     addAuditLog('UPDATE', 'DELIVERY', `Ažurirana dostava: ${updates.name || id}`);
@@ -510,22 +487,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteDelivery = (id: string) => {
     const del = state.deliveries.find(d => d.id === id);
     if (!del) return;
-    if (!hasWriteAccess(getCategoriesForMaterials(del.materialIds || []))) return;
+    if (!hasWriteAccess('dostava')) return;
     
     setState(prev => ({ ...prev, deliveries: prev.deliveries.filter(d => d.id !== id) }));
     addAuditLog('DELETE', 'DELIVERY', `Obrisana dostava: ${del.name}`);
   };
 
   const addWork = (w: Omit<Work, 'id'>) => {
-    if (!hasWriteAccess(getCategoriesForMaterials(w.materialIds || []))) return;
+    if (!hasWriteAccess('radovi')) return;
     setState(prev => ({ ...prev, works: [...prev.works, { ...w, id: `manual-${Date.now()}` }] }));
     addAuditLog('CREATE', 'WORK', `Dodani radovi: ${w.name}`);
   };
   const updateWork = (id: string, updates: Partial<Work>) => {
     const work = state.works.find(w => w.id === id);
     if (!work) return;
-    if (!hasWriteAccess(getCategoriesForMaterials(work.materialIds || []))) return;
-    if (updates.materialIds && !hasWriteAccess(getCategoriesForMaterials(updates.materialIds))) return;
+    if (!hasWriteAccess('radovi')) return;
     
     setState(prev => ({ ...prev, works: prev.works.map(w => w.id === id ? { ...w, ...updates } : w) }));
     addAuditLog('UPDATE', 'WORK', `Ažurirani radovi: ${updates.name || id}`);
@@ -533,31 +509,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteWork = (id: string) => {
     const work = state.works.find(w => w.id === id);
     if (!work) return;
-    if (!hasWriteAccess(getCategoriesForMaterials(work.materialIds || []))) return;
+    if (!hasWriteAccess('radovi')) return;
     
     setState(prev => ({ ...prev, works: prev.works.filter(w => w.id !== id) }));
     addAuditLog('DELETE', 'WORK', `Obrisani radovi: ${work.name}`);
   };
 
-  const getCategoriesForSaving = (saving: Partial<Saving>) => {
-     if (saving.materialId) return getCategoriesForMaterials([saving.materialId]);
-     if (saving.workId) {
-        const w = state.works.find(w => w.id === saving.workId);
-        if (w) return getCategoriesForMaterials(w.materialIds || []);
-     }
-     return [];
-  };
-
   const addSaving = (s: Omit<Saving, 'id'>) => {
-    if (!hasWriteAccess(getCategoriesForSaving(s))) return;
+    if (!hasWriteAccess('ustede')) return;
     setState(prev => ({ ...prev, savings: [...prev.savings, { ...s, id: `manual-${Date.now()}` }] }));
     addAuditLog('CREATE', 'SAVING', `Dodana ušteda: ${s.name}`);
   };
   const updateSaving = (id: string, updates: Partial<Saving>) => {
     const sav = state.savings.find(s => s.id === id);
     if (!sav) return;
-    if (!hasWriteAccess(getCategoriesForSaving(sav))) return;
-    if ((updates.materialId || updates.workId) && !hasWriteAccess(getCategoriesForSaving({ ...sav, ...updates }))) return;
+    if (!hasWriteAccess('ustede')) return;
     
     setState(prev => ({ ...prev, savings: prev.savings.map(s => s.id === id ? { ...s, ...updates } : s) }));
     addAuditLog('UPDATE', 'SAVING', `Ažurirana ušteda: ${updates.name || id}`);
@@ -565,22 +531,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteSaving = (id: string) => {
     const sav = state.savings.find(s => s.id === id);
     if (!sav) return;
-    if (!hasWriteAccess(getCategoriesForSaving(sav))) return;
+    if (!hasWriteAccess('ustede')) return;
     
     setState(prev => ({ ...prev, savings: prev.savings.filter(s => s.id !== id) }));
     addAuditLog('DELETE', 'SAVING', `Obrisana ušteda: ${sav.name}`);
   };
 
   const addPayment = (p: Omit<Payment, 'id'>) => {
-    if (!hasWriteAccess([p.categoryId])) return;
+    if (!hasWriteAccess('uplate')) return;
     setState(prev => ({ ...prev, payments: [...prev.payments, { ...p, id: Date.now().toString() }] }));
     addAuditLog('CREATE', 'PAYMENT', `Dodana uplata: ${p.name}`);
   };
   const updatePayment = (id: string, updates: Partial<Payment>) => {
     const payment = state.payments.find(p => p.id === id);
     if (!payment) return;
-    if (!hasWriteAccess([payment.categoryId])) return;
-    if (updates.categoryId && !hasWriteAccess([updates.categoryId])) return;
+    if (!hasWriteAccess('uplate')) return;
 
     setState(prev => ({ ...prev, payments: prev.payments.map(p => p.id === id ? { ...p, ...updates } : p) }));
     addAuditLog('UPDATE', 'PAYMENT', `Ažurirana uplata: ${updates.name || id}`);
@@ -588,14 +553,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deletePayment = (id: string) => {
     const payment = state.payments.find(p => p.id === id);
     if (!payment) return;
-    if (!hasWriteAccess([payment.categoryId])) return;
+    if (!hasWriteAccess('uplate')) return;
     
     setState(prev => ({ ...prev, payments: prev.payments.filter(p => p.id !== id) }));
     addAuditLog('DELETE', 'PAYMENT', `Obrisana uplata: ${payment.name}`);
   };
 
   const setLoanTarget = (amount: number) => {
-    if (currentUser?.permissions.readOnly) return;
+    if (!hasWriteAccess('kredit')) return;
     setState(prev => ({ ...prev, loanTarget: amount }));
     addAuditLog('UPDATE', 'SYSTEM', `Ažuriran ciljani iznos kredita na ${amount}`);
   };
@@ -654,7 +619,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLoanTarget,
       createSnapshot, deleteSnapshot,
       importData, exportData,
-      updateUIConfig, addAuditLog
+      addAuditLog,
+      hasWriteAccess
     }}>
       {children}
     </AppContext.Provider>

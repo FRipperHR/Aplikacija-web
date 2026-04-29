@@ -8,6 +8,8 @@ export enum UserRole {
   MEMBER = 'MEMBER',
 }
 
+export type AppModule = 'materijali' | 'dostava' | 'radovi' | 'ustede' | 'uplate' | 'kredit';
+
 export interface UserPermissions {
   kredit: boolean;
   uplate: boolean;
@@ -21,7 +23,7 @@ export interface UserPermissions {
   backup: boolean;
   readOnly?: boolean; // If true, the user can only view allowed sections, but cannot add/edit/delete
   allowedCategories?: string[]; // IDs of categories they can access. If empty or undefined, they can access all.
-  allowedWriteCategories?: string[]; // IDs of categories they can write to, overriding readOnly
+  allowedWriteModules?: AppModule[]; // Modules they can write to, overriding readOnly
 }
 
 export interface AuditLog {
@@ -32,12 +34,6 @@ export interface AuditLog {
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'OTHER';
   entity: 'MATERIAL' | 'CATEGORY' | 'USER' | 'PAYMENT' | 'WORK' | 'DELIVERY' | 'SAVING' | 'SYSTEM';
   details: string;
-}
-
-export interface UIConfig {
-  welcomeTitle: string;
-  welcomeSubtitle: string;
-  appName: string;
 }
 
 export interface User {
@@ -114,7 +110,6 @@ export interface AppState {
     data: string;
   }[];
   auditLogs?: AuditLog[];
-  uiConfig?: UIConfig;
   lastModified?: string;
   lastSynced?: string;
 }

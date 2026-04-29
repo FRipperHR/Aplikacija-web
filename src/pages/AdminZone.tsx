@@ -33,7 +33,7 @@ const PermissionToggle = ({
 );
 
 const UserRow = ({ user, isAdmin, onDelete }: { user: User, isAdmin: boolean, onDelete: (id: string) => void, key?: string }) => {
-  const { updateUserPermissions, resetUserPin, currentUser } = useApp();
+  const { state, updateUserPermissions, resetUserPin, currentUser } = useApp();
   const [isExpanded, setIsExpanded] = useState(false);
   const [newPin, setNewPin] = useState('');
 
@@ -115,27 +115,31 @@ const UserRow = ({ user, isAdmin, onDelete }: { user: User, isAdmin: boolean, on
 
                {user.permissions.readOnly && (
                  <div className="border-t border-slate-200 pt-4 mt-4">
-                   <p className="text-[10px] font-bold text-slate-500 mb-2 leading-none uppercase tracking-tighter">Omogući Pisanje (Write) Za Kategorije:</p>
+                   <p className="text-[10px] font-bold text-slate-500 mb-2 leading-none uppercase tracking-tighter">Omogući Pisanje (Write) Za Module:</p>
                    <div className="flex flex-wrap gap-2">
-                     {state.categories.map(cat => (
-                       <label key={cat.id} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 cursor-pointer hover:bg-slate-50">
+                     {[
+                       { id: 'materijali', name: 'Materijali' },
+                       { id: 'dostava', name: 'Dostava' },
+                       { id: 'radovi', name: 'Radovi' },
+                       { id: 'ustede', name: 'Uštede' },
+                       { id: 'uplate', name: 'Uplate' },
+                       { id: 'kredit', name: 'Kredit' }
+                     ].map(mod => (
+                       <label key={mod.id} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 cursor-pointer hover:bg-slate-50">
                          <input 
                            type="checkbox" 
-                           checked={user.permissions.allowedWriteCategories?.includes(cat.id) || false}
+                           checked={user.permissions.allowedWriteModules?.includes(mod.id as any) || false}
                            onChange={(e) => {
-                             const set = new Set(user.permissions.allowedWriteCategories || []);
-                             if (e.target.checked) set.add(cat.id);
-                             else set.delete(cat.id);
-                             handlePermissionChange('allowedWriteCategories', Array.from(set));
+                             const set = new Set(user.permissions.allowedWriteModules || []);
+                             if (e.target.checked) set.add(mod.id as any);
+                             else set.delete(mod.id as any);
+                             handlePermissionChange('allowedWriteModules', Array.from(set));
                            }}
                            className="w-3 h-3 text-sky-500 rounded border-slate-300 focus:ring-sky-500"
                          />
-                         <span className="text-[11px] font-bold text-slate-700 leading-none">{cat.name}</span>
+                         <span className="text-[11px] font-bold text-slate-700 leading-none">{mod.name}</span>
                        </label>
                      ))}
-                     {state.categories.length === 0 && (
-                       <span className="text-[11px] text-slate-400 italic">Nema kategorija</span>
-                     )}
                    </div>
                  </div>
                )}
@@ -169,13 +173,11 @@ const UserRow = ({ user, isAdmin, onDelete }: { user: User, isAdmin: boolean, on
 };
 
 export default function AdminZone() {
-  const { state, addUser, deleteUser, updateUIConfig } = useApp();
+  const { state, addUser, deleteUser } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [newPin, setNewPin] = useState('');
-  const [appName, setAppName] = useState(state.uiConfig?.appName || 'Apartman troškovnik');
-  const [welcomeTitle, setWelcomeTitle] = useState(state.uiConfig?.welcomeTitle || 'Dobrodošli u sustav');
 
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,11 +185,6 @@ export default function AdminZone() {
     setIsModalOpen(false);
     setNewName('');
     setNewPin('');
-  };
-
-  const handleSaveUIConfig = () => {
-     updateUIConfig({ appName, welcomeTitle });
-     alert('Postavke sučelja uspješno spremljene!');
   };
 
   return (
@@ -206,21 +203,6 @@ export default function AdminZone() {
         </button>
       </header>
       
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-6">
-        <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Postavke sučelja</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-           <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Naziv Aplikacije (Meni i Prikaz)</label>
-              <input value={appName} onChange={(e) => setAppName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500" />
-           </div>
-           <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Tekst Dobrodošlice (Login i Dashboard)</label>
-              <input value={welcomeTitle} onChange={(e) => setWelcomeTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500" />
-           </div>
-        </div>
-        <button onClick={handleSaveUIConfig} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all">Spremi Postavke</button>
-      </div>
-
       <div className="flex flex-col gap-1">
         <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Članovi projekta</h2>
         {state.users.map(u => (

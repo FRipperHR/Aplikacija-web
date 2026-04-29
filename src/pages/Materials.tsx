@@ -22,8 +22,9 @@ import { ConfirmModal } from '../components/ui/ConfirmModal';
 export default function Materials() {
   const { state, addMaterial, updateMaterial, deleteMaterial, hasWriteAccess, currentUser } = useApp();
 
-  // If user is restricted to write only on specific categories, filter the dropdowns
-  const availableCategories = state.categories.filter(c => hasWriteAccess([c.id]));
+  // If user has read-only globally but write access to this module, they can add/edit materials.
+  const canEdit = hasWriteAccess('materijali');
+  const availableCategories = state.categories;
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -91,7 +92,7 @@ export default function Materials() {
           <h1 className="text-xl font-black text-slate-900 tracking-tight">MATERIJALI</h1>
           <p className="text-xs text-slate-500 font-medium tracking-wide">Upravljajte nabavkom i troškovima materijala</p>
         </div>
-        {(!currentUser?.permissions.readOnly || availableCategories.length > 0) && (
+        {canEdit && (
           <button 
             onClick={handleOpenAdd}
             className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-5 rounded-lg text-xs shadow-sm transition-all flex items-center gap-2 active:scale-95"
@@ -189,7 +190,7 @@ export default function Materials() {
                        </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                       {hasWriteAccess([m.categoryId]) && (
+                       {canEdit && (
                          <div className="flex items-center gap-1 transition-opacity justify-end">
                             <button onClick={() => handleOpenEdit(m)} className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded transition-all">
                                <Edit2 className="w-3.5 h-3.5" />
@@ -249,7 +250,7 @@ export default function Materials() {
                       onChange={e => setFormData({...formData, categoryId: e.target.value})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     >
-                      {(currentUser?.permissions.readOnly ? availableCategories : state.categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      {state.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
 

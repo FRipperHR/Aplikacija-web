@@ -8,7 +8,8 @@ import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { Payment } from '../types';
 
 export default function Loan() {
-  const { state, addPayment, updatePayment, deletePayment, setLoanTarget } = useApp();
+  const { state, addPayment, updatePayment, deletePayment, setLoanTarget, hasWriteAccess } = useApp();
+  const canEdit = hasWriteAccess('kredit');
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
@@ -77,13 +78,13 @@ export default function Loan() {
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Kredit</h1>
           <p className="text-slate-500 mt-1 font-medium">Pregled svih uplata i otplata vezanih uz kredit</p>
         </div>
-        <button 
+        {canEdit && ( <button 
           onClick={handleOpenAdd}
           className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-2xl shadow-lg shadow-amber-100 transition-all flex items-center gap-2 active:scale-95"
         >
           <Plus className="w-5 h-5" />
           Nova uplata kredita
-        </button>
+        </button> )}
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -91,17 +92,19 @@ export default function Loan() {
             <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Ukupno otplaćeno</p>
             <p className="text-3xl font-black text-amber-400">{formatCurrency(totalLoaned)}</p>
          </div>
-         <div className="md:col-span-1 bg-white border border-slate-100 p-6 rounded-3xl flex flex-col justify-between group cursor-pointer hover:border-amber-200 transition-colors" onClick={() => setIsTargetModalOpen(true)}>
+         <div className={cn("md:col-span-1 bg-white border border-slate-100 p-6 rounded-3xl flex flex-col justify-between group transition-colors", canEdit ? "cursor-pointer hover:border-amber-200" : "")} onClick={() => canEdit && setIsTargetModalOpen(true)}>
             <div>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Ukupan dug</p>
-                <Target className="w-4 h-4 text-slate-300 group-hover:text-amber-500 transition-colors" />
+                {canEdit && <Target className="w-4 h-4 text-slate-300 group-hover:text-amber-500 transition-colors" />}
               </div>
               <p className="text-2xl font-black text-slate-900">{formatCurrency(state.loanTarget || 0)}</p>
             </div>
-            <p className="text-[10px] font-bold text-amber-600 mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-tighter">
-              Kliknite za promjenu duga
-            </p>
+            {canEdit && (
+              <p className="text-[10px] font-bold text-amber-600 mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-tighter">
+                Kliknite za promjenu duga
+              </p>
+            )}
          </div>
          <div className="md:col-span-1 bg-amber-50 p-6 rounded-3xl flex flex-col justify-between">
             <div>
@@ -179,14 +182,16 @@ export default function Loan() {
                        <p className="text-lg font-black text-slate-900">{formatCurrency(p.amount)}</p>
                     </td>
                     <td className="px-6 py-5">
-                       <div className="flex items-center gap-2 transition-opacity">
-                          <button onClick={() => handleOpenEdit(p)} className="p-2 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all">
-                             <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => setConfirmDeleteId(p.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
-                             <Trash2 className="w-4 h-4" />
-                          </button>
-                       </div>
+                       {canEdit && (
+                         <div className="flex items-center gap-2 transition-opacity">
+                            <button onClick={() => handleOpenEdit(p)} className="p-2 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all">
+                               <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setConfirmDeleteId(p.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                               <Trash2 className="w-4 h-4" />
+                            </button>
+                         </div>
+                       )}
                     </td>
                   </motion.tr>
                 );
