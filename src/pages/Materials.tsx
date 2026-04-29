@@ -20,7 +20,10 @@ import { Material } from '../types';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 
 export default function Materials() {
-  const { state, addMaterial, updateMaterial, deleteMaterial } = useApp();
+  const { state, addMaterial, updateMaterial, deleteMaterial, hasWriteAccess, currentUser } = useApp();
+
+  // If user is restricted to write only on specific categories, filter the dropdowns
+  const availableCategories = state.categories.filter(c => hasWriteAccess([c.id]));
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -88,13 +91,15 @@ export default function Materials() {
           <h1 className="text-xl font-black text-slate-900 tracking-tight">MATERIJALI</h1>
           <p className="text-xs text-slate-500 font-medium tracking-wide">Upravljajte nabavkom i troškovima materijala</p>
         </div>
-        <button 
-          onClick={handleOpenAdd}
-          className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-5 rounded-lg text-xs shadow-sm transition-all flex items-center gap-2 active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          Novi materijal
-        </button>
+        {(!currentUser?.permissions.readOnly || availableCategories.length > 0) && (
+          <button 
+            onClick={handleOpenAdd}
+            className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-5 rounded-lg text-xs shadow-sm transition-all flex items-center gap-2 active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            Novi materijal
+          </button>
+        )}
       </header>
 
       <div className="flex flex-col md:flex-row gap-3 mb-6">
@@ -184,14 +189,16 @@ export default function Materials() {
                        </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex items-center gap-1 transition-opacity justify-end">
-                         <button onClick={() => handleOpenEdit(m)} className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded transition-all">
-                            <Edit2 className="w-3.5 h-3.5" />
-                         </button>
-                         <button onClick={() => setConfirmDeleteId(m.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all">
-                            <Trash2 className="w-3.5 h-3.5" />
-                         </button>
-                      </div>
+                       {hasWriteAccess([m.categoryId]) && (
+                         <div className="flex items-center gap-1 transition-opacity justify-end">
+                            <button onClick={() => handleOpenEdit(m)} className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded transition-all">
+                               <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => setConfirmDeleteId(m.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all">
+                               <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                         </div>
+                       )}
                     </td>
                   </motion.tr>
                 );
@@ -242,7 +249,7 @@ export default function Materials() {
                       onChange={e => setFormData({...formData, categoryId: e.target.value})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     >
-                      {state.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      {(currentUser?.permissions.readOnly ? availableCategories : state.categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
 

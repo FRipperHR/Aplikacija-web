@@ -83,7 +83,7 @@ export default function Dashboard({ setActiveTab }: { setActiveTab: (tab: string
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-black text-slate-900 tracking-tight">DASHBOARD PREGLED</h1>
-          <p className="text-xs text-slate-500 font-medium tracking-wide">Dobrodošli u sustav Renovacija apartman</p>
+          <p className="text-xs text-slate-500 font-medium tracking-wide">{state.uiConfig?.welcomeTitle} {state.uiConfig?.appName}</p>
         </div>
         <div className="flex gap-2">
            <button className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors">Export Izvješće</button>

@@ -78,7 +78,7 @@ export const Sidebar = ({
   collapsed: boolean,
   setCollapsed: (collapsed: boolean) => void
 }) => {
-  const { currentUser, logout } = useApp();
+  const { currentUser, logout, state } = useApp();
 
   if (!currentUser) return null;
 
@@ -135,9 +135,9 @@ export const Sidebar = ({
               className="flex items-center gap-2"
             >
               <div className="w-2 h-6 bg-sky-400 rounded-full" />
-              <div className="flex flex-col">
-                <span className="text-sm font-black text-sky-400 tracking-tighter leading-none">RENOVACIJA</span>
-                <span className="text-xs font-medium text-white tracking-widest leading-none mt-0.5">APARTMAN</span>
+              <div className="flex flex-col overflow-hidden max-w-[160px]">
+                <span className="text-sm font-black text-sky-400 tracking-tighter leading-none truncate" title={state.uiConfig?.appName}>{state.uiConfig?.appName?.toUpperCase() || 'RENOVACIJA'}</span>
+                <span className="text-[10px] font-medium text-slate-500 tracking-widest leading-none mt-1 truncate">APARTMAN</span>
               </div>
             </motion.div>
           ) : (

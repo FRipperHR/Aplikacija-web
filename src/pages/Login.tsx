@@ -4,11 +4,13 @@ import { Lock, User, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Login() {
-  const { login } = useApp();
+  const { login, state } = useApp();
   const [username, setUsername] = useState('');
   const [identifier, setIdentifier] = useState('');
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'admin' | 'member'>('admin');
+  
+  const uiConfig = state.uiConfig || { appName: 'Apartman troškovnik', welcomeTitle: 'Dobrodošli u sustav', welcomeSubtitle: 'Praćenje troškova adaptacije i renovacije' };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,8 +33,8 @@ export default function Login() {
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg shadow-blue-200">
               <ShieldCheck className="w-10 h-10" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Renovacija apartman</h1>
-            <p className="text-slate-500 mt-2">Pristupite sustavu za vođenje projekta</p>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{uiConfig.appName}</h1>
+            <p className="text-slate-500 mt-2">{uiConfig.welcomeTitle}</p>
           </div>
 
           <div className="flex bg-slate-100 p-1 rounded-xl mb-8">

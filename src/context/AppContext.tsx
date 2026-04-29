@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { AppState, User, UserRole, UserPermissions, Category, Material, Delivery, Work, Saving, Payment } from '../types';
+import { AppState, User, UserRole, UserPermissions, Category, Material, Delivery, Work, Saving, Payment, UIConfig, AuditLog } from '../types';
 
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -47,6 +47,9 @@ interface AppContextType {
   
   importData: (jsonData: string) => boolean;
   exportData: () => string;
+  updateUIConfig: (config: Partial<UIConfig>) => void;
+  addAuditLog: (action: AuditLog['action'], entity: AuditLog['entity'], details: string) => void;
+  hasWriteAccess: (categoryIds?: string[]) => boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -62,6 +65,8 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   izvjesca: true,
   adminZona: false,
   backup: false,
+  readOnly: false,
+  allowedCategories: [],
 };
 
 const INITIAL_STATE: AppState = {
@@ -84,6 +89,12 @@ const INITIAL_STATE: AppState = {
   works: [],
   savings: [],
   payments: [],
+  uiConfig: {
+    welcomeTitle: 'Dobrodošli u sustav',
+    welcomeSubtitle: 'Praćenje troškova adaptacije i renovacije',
+    appName: 'Apartman troškovnik',
+  },
+  auditLogs: [],
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -199,16 +210,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser]);
 
+  const updateUIConfig = (newConfig: Partial<UIConfig>) => {
+    setState(prev => ({
+      ...prev,
+      uiConfig: { ...(prev.uiConfig || INITIAL_STATE.uiConfig!), ...newConfig }
+    }));
+  };
+
   const login = (username: string, identifier: string) => {
     const user = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
     if (user && user.pin === identifier) {
       setCurrentUser(user);
+      
+      // Auto-backup on login
+      setState(prev => {
+        const stateToSave = { ...prev, snapshots: undefined };
+        const newSnapshot = {
+          id: crypto.randomUUID(),
+          date: new Date().toISOString(),
+          note: `Automatski backup: Prijava korisnika ${user.username}`,
+          data: JSON.stringify(stateToSave)
+        };
+        
+        // Add audit log for login
+        const newLog: AuditLog = {
+          id: crypto.randomUUID(),
+          date: new Date().toISOString(),
+          userId: user.id,
+          username: user.username,
+          action: 'LOGIN',
+          entity: 'USER',
+          details: 'Uspješna prijava u sustav'
+        };
+        
+        return {
+          ...prev,
+          snapshots: [newSnapshot, ...(prev.snapshots || [])].slice(0, 10), // Keep 10 max
+          auditLogs: [newLog, ...(prev.auditLogs || [])].slice(0, 50) // Keep last 50 logs
+        };
+      });
+      
       return true;
     }
     return false;
   };
 
   const logout = () => setCurrentUser(null);
+
+  const addAuditLog = useCallback((action: AuditLog['action'], entity: AuditLog['entity'], details: string) => {
+    setState(prev => {
+      if (!currentUser) return prev;
+      const newLog: AuditLog = {
+        id: crypto.randomUUID(),
+        date: new Date().toISOString(),
+        userId: currentUser.id,
+        username: currentUser.username,
+        action,
+        entity,
+        details
+      };
+      return {
+        ...prev,
+        auditLogs: [newLog, ...(prev.auditLogs || [])].slice(0, 50)
+      };
+    });
+  }, [currentUser, setState]);
+
+  const hasWriteAccess = useCallback((categoryIds?: string[]) => {
+    if (!currentUser) return false;
+    if (currentUser.role === UserRole.ADMIN) return true;
+    if (!currentUser.permissions.readOnly) return true;
+    
+    // If user is readOnly, check if they have specific write access to ALL provided categories
+    if (currentUser.permissions.allowedWriteCategories && currentUser.permissions.allowedWriteCategories.length > 0) {
+      if (!categoryIds || categoryIds.length === 0) {
+        // Uncategorized items cannot be modified if strictly readOnly
+        return false;
+      }
+      return categoryIds.every(id => currentUser.permissions.allowedWriteCategories!.includes(id));
+    }
+    
+    return false;
+  }, [currentUser]);
 
   const updateMemberPin = (userId: string, newPin: string) => {
     setState(prev => ({
@@ -363,6 +446,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addMaterial = (m: Omit<Material, 'id'>) => {
+    if (!hasWriteAccess([m.categoryId])) return;
     const id = Date.now().toString();
     const newMaterial = { ...m, id };
     setState(prev => ({
@@ -370,29 +454,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       materials: [...prev.materials, newMaterial]
     }));
     syncMaterialArtifacts(newMaterial);
+    addAuditLog('CREATE', 'MATERIAL', `Dodan materijal: ${m.name}`);
   };
 
   const updateMaterial = (id: string, updates: Partial<Material>) => {
+    const mat = state.materials.find(m => m.id === id);
+    if (!mat) return;
+    if (!hasWriteAccess([mat.categoryId])) return;
+    if (updates.categoryId && updates.categoryId !== mat.categoryId && !hasWriteAccess([updates.categoryId])) return;
+
     setState(prev => {
       const updatedMaterials = prev.materials.map(m => m.id === id ? { ...m, ...updates } : m);
-      const updatedMaterial = updatedMaterials.find(m => m.id === id);
-      if (updatedMaterial) {
-        // We delay sync to next tick or handle it within setState correctly
-        // Since we are inside setState, we need to be careful.
-        // Actually, let's update materials first then call sync outside or use a more functional approach
-        return { ...prev, materials: updatedMaterials };
-      }
-      return prev;
+      return { ...prev, materials: updatedMaterials };
     });
-    
-    // Sync after state update to access latest values
     setTimeout(() => {
       const latestMaterial = state.materials.find(m => m.id === id);
       if (latestMaterial) syncMaterialArtifacts({ ...latestMaterial, ...updates });
+      addAuditLog('UPDATE', 'MATERIAL', `Ažuriran materijal: ${latestMaterial?.name || id}`);
     }, 0);
   };
 
   const deleteMaterial = (id: string) => {
+    const mat = state.materials.find(m => m.id === id);
+    if (!mat) return;
+    if (!hasWriteAccess([mat.categoryId])) return;
+
     setState(prev => ({
       ...prev,
       materials: prev.materials.filter(m => m.id !== id),
@@ -400,50 +486,118 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       works: prev.works.map(w => ({ ...w, materialIds: w.materialIds.filter(mid => mid !== id) })).filter(w => w.materialIds.length > 0 || w.id.startsWith('manual')),
       savings: prev.savings.filter(s => s.materialId !== id)
     }));
+    addAuditLog('DELETE', 'MATERIAL', `Obrisan materijal: ${mat.name}`);
+  };
+
+  const getCategoriesForMaterials = (materialIds: string[]) => {
+    return Array.from(new Set(state.materials.filter(m => materialIds.includes(m.id)).map(m => m.categoryId)));
   };
 
   const addDelivery = (d: Omit<Delivery, 'id'>) => {
+    if (!hasWriteAccess(getCategoriesForMaterials(d.materialIds || []))) return;
     setState(prev => ({ ...prev, deliveries: [...prev.deliveries, { ...d, id: `manual-${Date.now()}` }] }));
+    addAuditLog('CREATE', 'DELIVERY', `Dodana dostava: ${d.name}`);
   };
   const updateDelivery = (id: string, updates: Partial<Delivery>) => {
+    const del = state.deliveries.find(d => d.id === id);
+    if (!del) return;
+    if (!hasWriteAccess(getCategoriesForMaterials(del.materialIds || []))) return;
+    if (updates.materialIds && !hasWriteAccess(getCategoriesForMaterials(updates.materialIds))) return;
+    
     setState(prev => ({ ...prev, deliveries: prev.deliveries.map(d => d.id === id ? { ...d, ...updates } : d) }));
+    addAuditLog('UPDATE', 'DELIVERY', `Ažurirana dostava: ${updates.name || id}`);
   };
   const deleteDelivery = (id: string) => {
+    const del = state.deliveries.find(d => d.id === id);
+    if (!del) return;
+    if (!hasWriteAccess(getCategoriesForMaterials(del.materialIds || []))) return;
+    
     setState(prev => ({ ...prev, deliveries: prev.deliveries.filter(d => d.id !== id) }));
+    addAuditLog('DELETE', 'DELIVERY', `Obrisana dostava: ${del.name}`);
   };
 
   const addWork = (w: Omit<Work, 'id'>) => {
+    if (!hasWriteAccess(getCategoriesForMaterials(w.materialIds || []))) return;
     setState(prev => ({ ...prev, works: [...prev.works, { ...w, id: `manual-${Date.now()}` }] }));
+    addAuditLog('CREATE', 'WORK', `Dodani radovi: ${w.name}`);
   };
   const updateWork = (id: string, updates: Partial<Work>) => {
+    const work = state.works.find(w => w.id === id);
+    if (!work) return;
+    if (!hasWriteAccess(getCategoriesForMaterials(work.materialIds || []))) return;
+    if (updates.materialIds && !hasWriteAccess(getCategoriesForMaterials(updates.materialIds))) return;
+    
     setState(prev => ({ ...prev, works: prev.works.map(w => w.id === id ? { ...w, ...updates } : w) }));
+    addAuditLog('UPDATE', 'WORK', `Ažurirani radovi: ${updates.name || id}`);
   };
   const deleteWork = (id: string) => {
+    const work = state.works.find(w => w.id === id);
+    if (!work) return;
+    if (!hasWriteAccess(getCategoriesForMaterials(work.materialIds || []))) return;
+    
     setState(prev => ({ ...prev, works: prev.works.filter(w => w.id !== id) }));
+    addAuditLog('DELETE', 'WORK', `Obrisani radovi: ${work.name}`);
+  };
+
+  const getCategoriesForSaving = (saving: Partial<Saving>) => {
+     if (saving.materialId) return getCategoriesForMaterials([saving.materialId]);
+     if (saving.workId) {
+        const w = state.works.find(w => w.id === saving.workId);
+        if (w) return getCategoriesForMaterials(w.materialIds || []);
+     }
+     return [];
   };
 
   const addSaving = (s: Omit<Saving, 'id'>) => {
+    if (!hasWriteAccess(getCategoriesForSaving(s))) return;
     setState(prev => ({ ...prev, savings: [...prev.savings, { ...s, id: `manual-${Date.now()}` }] }));
+    addAuditLog('CREATE', 'SAVING', `Dodana ušteda: ${s.name}`);
   };
   const updateSaving = (id: string, updates: Partial<Saving>) => {
+    const sav = state.savings.find(s => s.id === id);
+    if (!sav) return;
+    if (!hasWriteAccess(getCategoriesForSaving(sav))) return;
+    if ((updates.materialId || updates.workId) && !hasWriteAccess(getCategoriesForSaving({ ...sav, ...updates }))) return;
+    
     setState(prev => ({ ...prev, savings: prev.savings.map(s => s.id === id ? { ...s, ...updates } : s) }));
+    addAuditLog('UPDATE', 'SAVING', `Ažurirana ušteda: ${updates.name || id}`);
   };
   const deleteSaving = (id: string) => {
+    const sav = state.savings.find(s => s.id === id);
+    if (!sav) return;
+    if (!hasWriteAccess(getCategoriesForSaving(sav))) return;
+    
     setState(prev => ({ ...prev, savings: prev.savings.filter(s => s.id !== id) }));
+    addAuditLog('DELETE', 'SAVING', `Obrisana ušteda: ${sav.name}`);
   };
 
   const addPayment = (p: Omit<Payment, 'id'>) => {
+    if (!hasWriteAccess([p.categoryId])) return;
     setState(prev => ({ ...prev, payments: [...prev.payments, { ...p, id: Date.now().toString() }] }));
+    addAuditLog('CREATE', 'PAYMENT', `Dodana uplata: ${p.name}`);
   };
   const updatePayment = (id: string, updates: Partial<Payment>) => {
+    const payment = state.payments.find(p => p.id === id);
+    if (!payment) return;
+    if (!hasWriteAccess([payment.categoryId])) return;
+    if (updates.categoryId && !hasWriteAccess([updates.categoryId])) return;
+
     setState(prev => ({ ...prev, payments: prev.payments.map(p => p.id === id ? { ...p, ...updates } : p) }));
+    addAuditLog('UPDATE', 'PAYMENT', `Ažurirana uplata: ${updates.name || id}`);
   };
   const deletePayment = (id: string) => {
+    const payment = state.payments.find(p => p.id === id);
+    if (!payment) return;
+    if (!hasWriteAccess([payment.categoryId])) return;
+    
     setState(prev => ({ ...prev, payments: prev.payments.filter(p => p.id !== id) }));
+    addAuditLog('DELETE', 'PAYMENT', `Obrisana uplata: ${payment.name}`);
   };
 
   const setLoanTarget = (amount: number) => {
+    if (currentUser?.permissions.readOnly) return;
     setState(prev => ({ ...prev, loanTarget: amount }));
+    addAuditLog('UPDATE', 'SYSTEM', `Ažuriran ciljani iznos kredita na ${amount}`);
   };
 
   const createSnapshot = (note: string) => {
@@ -499,7 +653,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addPayment, updatePayment, deletePayment,
       setLoanTarget,
       createSnapshot, deleteSnapshot,
-      importData, exportData
+      importData, exportData,
+      updateUIConfig, addAuditLog
     }}>
       {children}
     </AppContext.Provider>

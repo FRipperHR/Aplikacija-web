@@ -19,6 +19,25 @@ export interface UserPermissions {
   izvjesca: boolean;
   adminZona: boolean;
   backup: boolean;
+  readOnly?: boolean; // If true, the user can only view allowed sections, but cannot add/edit/delete
+  allowedCategories?: string[]; // IDs of categories they can access. If empty or undefined, they can access all.
+  allowedWriteCategories?: string[]; // IDs of categories they can write to, overriding readOnly
+}
+
+export interface AuditLog {
+  id: string;
+  date: string;
+  userId: string;
+  username: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'OTHER';
+  entity: 'MATERIAL' | 'CATEGORY' | 'USER' | 'PAYMENT' | 'WORK' | 'DELIVERY' | 'SAVING' | 'SYSTEM';
+  details: string;
+}
+
+export interface UIConfig {
+  welcomeTitle: string;
+  welcomeSubtitle: string;
+  appName: string;
 }
 
 export interface User {
@@ -94,6 +113,8 @@ export interface AppState {
     note: string;
     data: string;
   }[];
+  auditLogs?: AuditLog[];
+  uiConfig?: UIConfig;
   lastModified?: string;
   lastSynced?: string;
 }

@@ -37,7 +37,7 @@ const UserRow = ({ user, isAdmin, onDelete }: { user: User, isAdmin: boolean, on
   const [isExpanded, setIsExpanded] = useState(false);
   const [newPin, setNewPin] = useState('');
 
-  const handlePermissionChange = (key: keyof UserPermissions, val: boolean) => {
+  const handlePermissionChange = (key: keyof UserPermissions, val: any) => {
     updateUserPermissions(user.id, { ...user.permissions, [key]: val });
   };
 
@@ -109,8 +109,36 @@ const UserRow = ({ user, isAdmin, onDelete }: { user: User, isAdmin: boolean, on
                     <PermissionToggle label="Izvješća" value={user.permissions.izvjesca} onChange={(v) => handlePermissionChange('izvjesca', v)} />
                     <PermissionToggle label="Admin Zona" value={user.permissions.adminZona} onChange={(v) => handlePermissionChange('adminZona', v)} />
                     <PermissionToggle label="Backup" value={user.permissions.backup} onChange={(v) => handlePermissionChange('backup', v)} />
+                    <PermissionToggle label="Samo pregled (Read Only)" value={user.permissions.readOnly || false} onChange={(v) => handlePermissionChange('readOnly', v)} />
                  </div>
                </div>
+
+               {user.permissions.readOnly && (
+                 <div className="border-t border-slate-200 pt-4 mt-4">
+                   <p className="text-[10px] font-bold text-slate-500 mb-2 leading-none uppercase tracking-tighter">Omogući Pisanje (Write) Za Kategorije:</p>
+                   <div className="flex flex-wrap gap-2">
+                     {state.categories.map(cat => (
+                       <label key={cat.id} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 cursor-pointer hover:bg-slate-50">
+                         <input 
+                           type="checkbox" 
+                           checked={user.permissions.allowedWriteCategories?.includes(cat.id) || false}
+                           onChange={(e) => {
+                             const set = new Set(user.permissions.allowedWriteCategories || []);
+                             if (e.target.checked) set.add(cat.id);
+                             else set.delete(cat.id);
+                             handlePermissionChange('allowedWriteCategories', Array.from(set));
+                           }}
+                           className="w-3 h-3 text-sky-500 rounded border-slate-300 focus:ring-sky-500"
+                         />
+                         <span className="text-[11px] font-bold text-slate-700 leading-none">{cat.name}</span>
+                       </label>
+                     ))}
+                     {state.categories.length === 0 && (
+                       <span className="text-[11px] text-slate-400 italic">Nema kategorija</span>
+                     )}
+                   </div>
+                 </div>
+               )}
 
                {user.role !== UserRole.ADMIN && (
                  <div className="border-t border-slate-200 pt-4 mt-4 flex gap-4 items-end">
@@ -141,11 +169,13 @@ const UserRow = ({ user, isAdmin, onDelete }: { user: User, isAdmin: boolean, on
 };
 
 export default function AdminZone() {
-  const { state, addUser, deleteUser } = useApp();
+  const { state, addUser, deleteUser, updateUIConfig } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [newPin, setNewPin] = useState('');
+  const [appName, setAppName] = useState(state.uiConfig?.appName || 'Apartman troškovnik');
+  const [welcomeTitle, setWelcomeTitle] = useState(state.uiConfig?.welcomeTitle || 'Dobrodošli u sustav');
 
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,12 +185,17 @@ export default function AdminZone() {
     setNewPin('');
   };
 
+  const handleSaveUIConfig = () => {
+     updateUIConfig({ appName, welcomeTitle });
+     alert('Postavke sučelja uspješno spremljene!');
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-black text-slate-900 tracking-tight">ADMIN ZONA</h1>
-          <p className="text-xs text-slate-500 font-medium tracking-wide">Upravljanje članovima tima i dozvolama</p>
+          <p className="text-xs text-slate-500 font-medium tracking-wide">Upravljanje članovima tima, dozvolama i postavkama</p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
@@ -170,12 +205,59 @@ export default function AdminZone() {
           Dodaj člana
         </button>
       </header>
+      
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-6">
+        <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Postavke sučelja</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+           <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Naziv Aplikacije (Meni i Prikaz)</label>
+              <input value={appName} onChange={(e) => setAppName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500" />
+           </div>
+           <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Tekst Dobrodošlice (Login i Dashboard)</label>
+              <input value={welcomeTitle} onChange={(e) => setWelcomeTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500" />
+           </div>
+        </div>
+        <button onClick={handleSaveUIConfig} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all">Spremi Postavke</button>
+      </div>
 
       <div className="flex flex-col gap-1">
         <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Članovi projekta</h2>
         {state.users.map(u => (
           <UserRow key={u.id} user={u} isAdmin={u.role === UserRole.ADMIN} onDelete={setConfirmDeleteId} />
         ))}
+      </div>
+      
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mt-6">
+        <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Dnevnik aktivnosti (Zadnjih 50)</h2>
+        {(!state.auditLogs || state.auditLogs.length === 0) ? (
+           <p className="text-xs text-slate-500 italic">Nema zabilježenih aktivnosti</p>
+        ) : (
+           <div className="overflow-x-auto">
+             <table className="w-full text-left border-collapse">
+               <thead>
+                 <tr>
+                   <th className="px-3 py-2 text-[10px] font-black text-slate-500 uppercase border-b border-slate-200">Datum</th>
+                   <th className="px-3 py-2 text-[10px] font-black text-slate-500 uppercase border-b border-slate-200">Korisnik</th>
+                   <th className="px-3 py-2 text-[10px] font-black text-slate-500 uppercase border-b border-slate-200">Akcija</th>
+                   <th className="px-3 py-2 text-[10px] font-black text-slate-500 uppercase border-b border-slate-200">Entitet</th>
+                   <th className="px-3 py-2 text-[10px] font-black text-slate-500 uppercase border-b border-slate-200">Detalji</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 {state.auditLogs.map(log => (
+                   <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                     <td className="px-3 py-2 text-xs text-slate-600">{new Date(log.date).toLocaleString('hr-HR')}</td>
+                     <td className="px-3 py-2 text-xs font-bold text-slate-700">{log.username}</td>
+                     <td className="px-3 py-2 text-xs text-slate-600"><span className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-black text-slate-600">{log.action}</span></td>
+                     <td className="px-3 py-2 text-xs text-slate-600">{log.entity}</td>
+                     <td className="px-3 py-2 text-xs text-slate-600 truncate max-w-[200px]" title={log.details}>{log.details}</td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+           </div>
+        )}
       </div>
 
       <AnimatePresence>
