@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AppState, User, UserRole, UserPermissions, Category, Material, Delivery, Work, Saving, Payment } from '../types';
 
+export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
+
 interface AppContextType {
   state: AppState;
   isLoading: boolean;
+  syncStatus: SyncStatus;
   currentUser: User | null;
   login: (username: string, identifier: string) => boolean;
   logout: () => void;
@@ -86,6 +89,7 @@ const INITIAL_STATE: AppState = {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setInternalState] = useState<AppState>(INITIAL_STATE);
   const [isLoading, setIsLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
 
   const setState: typeof setInternalState = useCallback((updater) => {
     setInternalState(prev => {
@@ -114,29 +118,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  // Load state from API on mount
+  // Load state from API on mount and setup polling
   useEffect(() => {
     const fetchState = async () => {
       try {
         const response = await fetch('/api/state');
         if (response.ok) {
           const data = await response.json();
-          setState(data);
-        } else {
-          // Fallback to localStorage if API fails (e.g. no data yet)
+          setSyncStatus('success');
+          setState((prev) => {
+            // Only update if server has newer data, or we have no data
+            if (!prev.lastModified || !data.lastModified || new Date(data.lastModified) > new Date(prev.lastModified)) {
+              return data;
+            }
+            return prev;
+          });
+        } else if (isLoading) {
+          // Fallback to localStorage on initial load if API fails
           const saved = localStorage.getItem('renovacija_app_state');
           if (saved) setState(JSON.parse(saved));
         }
       } catch (error) {
-        console.error('Failed to fetch state:', error);
-        const saved = localStorage.getItem('renovacija_app_state');
-        if (saved) setState(JSON.parse(saved));
+        if (!isLoading) {
+          // If polling, just do a silent warning so we don't spam the UI with red error boxes if server restarts
+          console.warn('Sync warning: Could not reach server');
+        } else {
+          console.error('Failed to fetch state:', error);
+        }
+        setSyncStatus('error');
+        if (isLoading) {
+          const saved = localStorage.getItem('renovacija_app_state');
+          if (saved) setState(JSON.parse(saved));
+        }
       } finally {
-        setIsLoading(false);
+        if (isLoading) setIsLoading(false);
       }
     };
-    fetchState();
-  }, []);
+
+    fetchState(); // Initial fetch
+    
+    // Poll for updates every 3 seconds
+    const intervalId = setInterval(fetchState, 3000);
+    return () => clearInterval(intervalId);
+  }, [isLoading, setState]);
 
   // Save state to API and localStorage when it changes
   useEffect(() => {
@@ -145,14 +169,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('renovacija_app_state', JSON.stringify(state));
     
     const saveState = async () => {
+      setSyncStatus('syncing');
       try {
-        await fetch('/api/state', {
+        const response = await fetch('/api/state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(state),
         });
+        if (response.ok) {
+          setSyncStatus('success');
+        } else {
+          setSyncStatus('error');
+        }
       } catch (error) {
-        console.error('Failed to save state to API:', error);
+        console.warn('Sync warning: Failed to save state to API');
+        setSyncStatus('error');
       }
     };
 
@@ -416,7 +447,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createSnapshot = (note: string) => {
-    const data = JSON.stringify(state);
+    // Prevent exponential growth: omit snapshots from the state being saved inside a snapshot
+    const stateToSave = { ...state, snapshots: undefined };
+    const data = JSON.stringify(stateToSave);
     const newSnapshot = {
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
@@ -456,7 +489,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      state, isLoading, currentUser, login, logout, updateMemberPin,
+      state, isLoading, syncStatus, currentUser, login, logout, updateMemberPin,
       addUser, updateUserPermissions, resetUserPin, deleteUser,
       addCategory, updateCategory, deleteCategory,
       addMaterial, updateMaterial, deleteMaterial,

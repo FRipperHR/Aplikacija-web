@@ -25,49 +25,28 @@ import { Menu } from 'lucide-react';
 import { cn } from './lib/utils';
 
 function SyncBubble() {
-  const { state } = useApp();
-  const [now, setNow] = useState(Date.now());
-  
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 60000); // update every minute
-    return () => clearInterval(interval);
-  }, []);
+  const { syncStatus } = useApp();
 
-  const lastModTime = state.lastModified ? new Date(state.lastModified).getTime() : 0;
-  const lastSyncTime = state.lastSynced ? new Date(state.lastSynced).getTime() : 0;
-  
-  const hasUnsyncedChanges = lastModTime > lastSyncTime;
-  const timeSinceChange = now - lastModTime;
-  
-  let status = 'green';
-  if (hasUnsyncedChanges) {
-     status = timeSinceChange > 24 * 60 * 60 * 1000 ? 'red' : 'orange';
+  let statusColor = 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]';
+  let message = 'Synology sync ok';
+
+  if (syncStatus === 'syncing') {
+    statusColor = 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] animate-pulse';
+    message = 'Sinkronizacija...';
+  } else if (syncStatus === 'error') {
+    statusColor = 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)] animate-pulse';
+    message = 'Greška pri spremanju';
+  } else if (syncStatus === 'idle') {
+    statusColor = 'bg-slate-300';
+    message = 'Čekanje...'; // mostly won't be seen because after load it's success
   }
 
-  const formatTime = (isoString?: string) => {
-     if (!isoString) return 'Nikad';
-     const d = new Date(isoString);
-     return d.toLocaleTimeString('hr-HR', { hour: '2-digit', minute: '2-digit' }) + ' (' + d.toLocaleDateString('hr-HR') + ')';
-  };
-
-  const displayTime = hasUnsyncedChanges ? state.lastModified : (state.lastSynced || state.lastModified);
-
   return (
-    <div className="fixed top-2 left-1/2 -translate-x-1/2 md:top-4 z-50 bg-white/90 backdrop-blur shadow-lg border border-slate-200 rounded-full py-1.5 px-3 md:py-2 md:px-4 flex items-center gap-2 cursor-help transition-all group hover:scale-105">
-      <div className={cn(
-        "w-2.5 h-2.5 rounded-full",
-        status === 'green' ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : 
-        status === 'red' ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)] animate-pulse" :
-        "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] animate-pulse"
-      )} />
-      <div className="flex flex-col">
-        <span className="text-[9px] md:text-[10px] font-black uppercase tracking-wider text-slate-400 leading-none mb-0.5">
-          {hasUnsyncedChanges ? 'Nespremljeno' : 'Backup OK'}
-        </span>
-        <span className="text-[10px] md:text-[11px] font-bold text-slate-700 leading-none">
-           Ažurirano: {formatTime(displayTime)}
-        </span>
-      </div>
+    <div className="fixed bottom-4 right-4 z-40 bg-white/90 backdrop-blur-sm shadow border border-slate-200/60 rounded-full py-1.5 px-3 flex items-center gap-2 transition-all opacity-80 hover:opacity-100">
+      <div className={cn("w-2 h-2 rounded-full", statusColor)} />
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+        {message}
+      </span>
     </div>
   );
 }
