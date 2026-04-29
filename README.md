@@ -1,12 +1,10 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+<img width="1200" height="475" alt="GHBanner" src="[https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6](https://www.simpalm.com/wp-content/uploads/Web-Application.webp)" />
 </div>
 
-# Run and deploy your AI Studio app
+# Run and deploy your synology app
 
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/730284cb-9db6-4eeb-a117-f3f293b2af41
+This contains everything you need to run your app locally or on your custom domain.
 
 ## Run Locally
 
@@ -15,6 +13,3 @@ View your app in AI Studio: https://ai.studio/apps/730284cb-9db6-4eeb-a117-f3f29
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
