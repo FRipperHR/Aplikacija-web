@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { PiggyBank, Info, Package, Trash2, ArrowDownRight, Plus, X, Edit2, Hammer } from 'lucide-react';
+import { PiggyBank, Info, Package, Trash2, ArrowDownRight, Plus, X, Edit2, Hammer, Truck } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
@@ -17,12 +17,13 @@ export default function Savings() {
     amount: 0,
     materialId: undefined,
     workId: undefined,
+    deliveryId: undefined,
     isAuto: false
   });
 
   const handleOpenAdd = () => {
     setEditingId(null);
-    setFormData({ name: '', amount: 0, materialId: undefined, workId: undefined, isAuto: false });
+    setFormData({ name: '', amount: 0, materialId: undefined, workId: undefined, deliveryId: undefined, isAuto: false });
     setIsModalOpen(true);
   };
 
@@ -34,6 +35,7 @@ export default function Savings() {
       amount: s.amount,
       materialId: s.materialId,
       workId: s.workId,
+      deliveryId: s.deliveryId,
       isAuto: s.isAuto
     });
     setIsModalOpen(true);
@@ -53,8 +55,8 @@ export default function Savings() {
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Uštede</h1>
-          <p className="text-slate-500 mt-1 font-medium">Pregled automatskih i ručno unesenih ušteda na projektu</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Uštede</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Pregled automatskih i ručno unesenih ušteda na projektu</p>
         </div>
         {canEdit && ( <button 
           onClick={handleOpenAdd}
@@ -67,7 +69,7 @@ export default function Savings() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {state.savings.length === 0 ? (
-          <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200">
+          <div className="col-span-full py-20 text-center bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
              <PiggyBank className="w-12 h-12 text-slate-200 mx-auto mb-4" />
              <p className="text-slate-400 italic">Nema evidentiranih ušteda. Pritisnite gumb iznad za ručni unos ili unesite materijale za auto-izračun.</p>
           </div>
@@ -75,17 +77,18 @@ export default function Savings() {
           state.savings.map((s) => {
             const linkedMaterial = s.materialId ? state.materials.find(m => m.id === s.materialId) : null;
             const linkedWork = s.workId ? state.works.find(w => w.id === s.workId) : null;
+            const linkedDelivery = s.deliveryId ? state.deliveries.find(d => d.id === s.deliveryId) : null;
             
             return (
               <motion.div 
                 layout
                 key={s.id}
-                className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group overflow-hidden relative"
+                className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800/50 shadow-sm hover:shadow-md transition-all group overflow-hidden relative"
               >
                 <div className="flex justify-between items-start mb-4 relative z-10">
                    <div className={cn(
                      "p-3 rounded-2xl",
-                     s.amount >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                     s.amount >= 0 ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400"
                    )}>
                       <PiggyBank className="w-6 h-6" />
                    </div>
@@ -99,7 +102,7 @@ export default function Savings() {
                         </button>
                         <button 
                           onClick={() => setConfirmDeleteId(s.id)}
-                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          className="p-2 text-slate-400 hover:text-red-500 dark:text-red-400 hover:bg-red-50 dark:bg-red-500/10 rounded-lg transition-all"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -108,10 +111,11 @@ export default function Savings() {
                 </div>
                 
                 <div className="relative z-10">
-                  <h3 className="font-bold text-slate-900 mb-1">{s.name}</h3>
+                  <h3 className="font-bold text-slate-900 dark:text-white mb-1">{s.name}</h3>
+                  {s.note && <p className="text-[10px] text-slate-400 mb-2 truncate">{s.note}</p>}
                   <div className={cn(
                     "text-3xl font-black mb-4",
-                    s.amount >= 0 ? "text-emerald-600" : "text-red-600"
+                    s.amount >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
                   )}>
                     {s.amount >= 0 ? '+' : ''}{formatCurrency(s.amount)}
                   </div>
@@ -127,15 +131,21 @@ export default function Savings() {
                     </div>
                     <div className="flex gap-2">
                       {linkedMaterial && (
-                         <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-bold border border-slate-100">
+                         <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg text-[10px] font-bold border border-slate-100 dark:border-slate-800/50">
                             <Package className="w-3 h-3 text-slate-400" />
                             {linkedMaterial.name}
                          </div>
                       )}
                       {linkedWork && (
-                         <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-bold border border-slate-100">
+                         <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg text-[10px] font-bold border border-slate-100 dark:border-slate-800/50">
                             <Hammer className="w-3 h-3 text-slate-400" />
                             {linkedWork.name}
+                         </div>
+                      )}
+                      {linkedDelivery && (
+                         <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg text-[10px] font-bold border border-slate-100 dark:border-slate-800/50">
+                            <Truck className="w-3 h-3 text-slate-400" />
+                            {linkedDelivery.name}
                          </div>
                       )}
                     </div>
@@ -144,7 +154,7 @@ export default function Savings() {
 
                 <div className={cn(
                   "absolute -bottom-10 -right-10 w-32 h-32 blur-3xl opacity-10 rounded-full",
-                  s.amount >= 0 ? "bg-emerald-500" : "bg-red-500 text-red-600"
+                  s.amount >= 0 ? "bg-emerald-500" : "bg-red-500 text-red-600 dark:text-red-400"
                 )}></div>
               </motion.div>
             );
@@ -152,13 +162,13 @@ export default function Savings() {
         )}
       </div>
 
-      <div className="bg-emerald-50 p-6 rounded-3xl flex gap-4 items-start border border-emerald-100">
-         <div className="p-2 bg-emerald-100 rounded-xl text-emerald-600">
+      <div className="bg-emerald-50 dark:bg-emerald-500/10 p-6 rounded-3xl flex gap-4 items-start border border-emerald-100">
+         <div className="p-2 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl text-emerald-600 dark:text-emerald-400">
             <ArrowDownRight className="w-5 h-5" />
          </div>
          <div>
-            <p className="text-sm font-bold text-emerald-900 mb-1">Upravljanje uštedama</p>
-            <p className="text-sm text-emerald-700 leading-relaxed">
+            <p className="text-sm font-bold text-emerald-900 dark:text-emerald-100 mb-1">Upravljanje uštedama</p>
+            <p className="text-sm text-emerald-700 dark:text-emerald-300 leading-relaxed">
               Uštede se automatski računaju iz razlike planiranog i plaćenog troška materijala, ali ih možete dodavati i ručno. 
               Ručne uštede možete povezati s konkretnim radovima ili materijalima radi bolje evidencije.
             </p>
@@ -179,34 +189,34 @@ export default function Savings() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden"
               onClick={e => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                  <PiggyBank className="w-6 h-6 text-emerald-600" />
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <PiggyBank className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                   {editingId ? 'Uredi uštedu' : 'Nova ušteda'}
                 </h3>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                  <X className="w-5 h-5 text-slate-500" />
+                  <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                 </button>
               </div>
 
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Naziv uštede</label>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Naziv uštede</label>
                   <input 
                     type="text"
                     required
                     value={formData.name}
                     onChange={e => setFormData({...formData, name: e.target.value})}
                     placeholder="npr. Popust na pločice"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Iznos uštede (€)</label>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Iznos uštede (€)</label>
                   <input 
                     type="number"
                     step="0.01"
@@ -214,18 +224,18 @@ export default function Savings() {
                     required
                     value={formData.amount || ''}
                     onChange={e => setFormData({...formData, amount: parseFloat(e.target.value) || 0})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
                   />
                   <p className="text-[10px] text-slate-400 mt-1 font-medium uppercase tracking-wider">Unesite pozitivan iznos za uštedu, negativan za prekoračenje</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Poveži s materijalom</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Poveži s materijalom</label>
                     <select 
                       value={formData.materialId || ''}
                       onChange={e => setFormData({...formData, materialId: e.target.value || undefined})}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
                     >
                       <option value="">Nijedan</option>
                       {state.materials.map(m => (
@@ -234,11 +244,11 @@ export default function Savings() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Poveži s radovima</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Poveži s radovima</label>
                     <select 
                       value={formData.workId || ''}
                       onChange={e => setFormData({...formData, workId: e.target.value || undefined})}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
                     >
                       <option value="">Nijedan</option>
                       {state.works.map(w => (
@@ -246,13 +256,37 @@ export default function Savings() {
                       ))}
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Poveži s dostavom</label>
+                    <select 
+                      value={formData.deliveryId || ''}
+                      onChange={e => setFormData({...formData, deliveryId: e.target.value || undefined})}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                    >
+                      <option value="">Nijedna</option>
+                      {state.deliveries.map(d => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Napomena (opcionalno)</label>
+                  <input 
+                    type="text"
+                    value={formData.note || ''}
+                    onChange={e => setFormData({...formData, note: e.target.value})}
+                    placeholder="siva mala slova će biti vidljiva..."
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all text-xs"
+                  />
                 </div>
 
                 <div className="pt-4 flex gap-3">
                   <button 
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-all"
+                    className="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:bg-slate-800 transition-all"
                   >
                     Odustani
                   </button>

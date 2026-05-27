@@ -1,6 +1,8 @@
 {
-  "name": "Renovacija apartman",
-  "description": "Profesionalna aplikacija za vođenje i praćenje renovacije apartmana, troškova, radova i ušteda.",
-  "requestFramePermissions": [],
+  "name": "Apartman",
+  "description": "Sustav za praćenje troškova materijala, radova i dostave po kategorijama.",
+  "requestFramePermissions": [
+    "camera"
+  ],
   "majorCapabilities": []
 }

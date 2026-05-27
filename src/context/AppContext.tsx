@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { AppState, User, UserRole, UserPermissions, Category, Material, Delivery, Work, Saving, Payment, AuditLog, AppModule } from '../types';
+import { AppState, User, UserRole, UserPermissions, Category, Material, Delivery, Work, Saving, Payment, Credit, AuditLog, AppModule } from '../types';
 
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -8,21 +8,22 @@ interface AppContextType {
   isLoading: boolean;
   syncStatus: SyncStatus;
   currentUser: User | null;
-  login: (username: string, identifier: string) => boolean;
+  login: (username: string, identifier: string) => Promise<boolean>;
   logout: () => void;
-  updateMemberPin: (userId: string, newPin: string) => void;
+  updateMemberPin: (userId: string, newPin: string) => Promise<void>;
+  updateUserProfile: (userId: string, displayName: string, avatar: string) => void;
   
   // State mutations
-  addUser: (name: string, pin: string) => void;
+  addUser: (name: string, pin: string, permissions?: UserPermissions) => Promise<void>;
   updateUserPermissions: (userId: string, permissions: UserPermissions) => void;
-  resetUserPin: (userId: string, newPin: string) => void;
+  resetUserPin: (userId: string, newPin: string) => Promise<void>;
   deleteUser: (userId: string) => void;
   
   addCategory: (name: string) => void;
   updateCategory: (id: string, name: string) => void;
   deleteCategory: (id: string) => void;
   
-  addMaterial: (material: Omit<Material, 'id'>) => void;
+  addMaterial: (material: Omit<Material, 'id'>) => string;
   updateMaterial: (id: string, material: Partial<Material>) => void;
   deleteMaterial: (id: string) => void;
   
@@ -41,9 +42,18 @@ interface AppContextType {
   addPayment: (payment: Omit<Payment, 'id'>) => void;
   updatePayment: (id: string, payment: Partial<Payment>) => void;
   deletePayment: (id: string) => void;
+  
+  addCredit: (credit: Omit<Credit, 'id' | 'repayments'>) => void;
+  updateCredit: (id: string, credit: Partial<Credit>) => void;
+  deleteCredit: (id: string) => void;
+  addRepayment: (creditId: string, amount: number, note?: string) => void;
+  approveRepayment: (creditId: string, repaymentId: string, userId: string) => void;
+  deleteRepayment: (creditId: string, repaymentId: string) => void;
+
   setLoanTarget: (amount: number) => void;
   createSnapshot: (note: string) => void;
   deleteSnapshot: (id: string) => void;
+  updateSettings: (settings: { geminiApiKey?: string }) => void;
   
   importData: (jsonData: string) => boolean;
   exportData: () => string;
@@ -68,16 +78,41 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   allowedCategories: [],
 };
 
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+const hashPinStatic = async (pin: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin);
+  
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  
+  // Fallback for non-secure contexts (HTTP)
+  // This is a simple non-cryptographic hash as a last resort
+  let hash = 0;
+  const pinStr = pin.toString();
+  for (let i = 0; i < pinStr.length; i++) {
+    const char = pinStr.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return 'fallback-' + Math.abs(hash).toString(16);
+};
+
 const INITIAL_STATE: AppState = {
-  users: [
-    {
-      id: 'admin-1',
-      username: 'josip',
-      pin: 'admin123',
-      role: UserRole.ADMIN,
-      permissions: { ...DEFAULT_PERMISSIONS, adminZona: true, backup: true },
-    },
-  ],
+  users: [],
   categories: [
     { id: '1', name: 'Kuhinja' },
     { id: '2', name: 'Kupaonica' },
@@ -89,6 +124,17 @@ const INITIAL_STATE: AppState = {
   savings: [],
   payments: [],
   auditLogs: [],
+};
+
+const migrateData = (data: AppState): AppState => {
+  const now = new Date().toISOString().split('T')[0];
+  if (!data) return data;
+  return {
+    ...data,
+    materials: (data.materials || []).map(m => ({ ...m, date: m.date || now })),
+    deliveries: (data.deliveries || []).map(d => ({ ...d, date: d.date || now })),
+    works: (data.works || []).map(w => ({ ...w, date: w.date || now })),
+  };
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -129,7 +175,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const response = await fetch('/api/state');
         if (response.ok) {
-          const data = await response.json();
+          const rawData = await response.json();
+          const data = migrateData(rawData);
           setSyncStatus('success');
           setState((prev) => {
             // Only update if server has newer data, or we have no data
@@ -141,7 +188,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else if (isLoading) {
           // Fallback to localStorage on initial load if API fails
           const saved = localStorage.getItem('renovacija_app_state');
-          if (saved) setState(JSON.parse(saved));
+          if (saved) {
+             const data = migrateData(JSON.parse(saved));
+             setState(data);
+          }
         }
       } catch (error) {
         if (!isLoading) {
@@ -153,7 +203,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSyncStatus('error');
         if (isLoading) {
           const saved = localStorage.getItem('renovacija_app_state');
-          if (saved) setState(JSON.parse(saved));
+          if (saved) {
+             const data = migrateData(JSON.parse(saved));
+             setState(data);
+          }
         }
       } finally {
         if (isLoading) setIsLoading(false);
@@ -204,40 +257,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser]);
 
-  const login = (username: string, identifier: string) => {
-    const user = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-    if (user && user.pin === identifier) {
-      setCurrentUser(user);
-      
-      // Auto-backup on login
-      setState(prev => {
-        const stateToSave = { ...prev, snapshots: undefined };
-        const newSnapshot = {
-          id: crypto.randomUUID(),
-          date: new Date().toISOString(),
-          note: `Automatski backup: Prijava korisnika ${user.username}`,
-          data: JSON.stringify(stateToSave)
-        };
-        
-        // Add audit log for login
-        const newLog: AuditLog = {
-          id: crypto.randomUUID(),
-          date: new Date().toISOString(),
-          userId: user.id,
-          username: user.username,
-          action: 'LOGIN',
-          entity: 'USER',
-          details: 'Uspješna prijava u sustav'
-        };
-        
-        return {
-          ...prev,
-          snapshots: [newSnapshot, ...(prev.snapshots || [])].slice(0, 10), // Keep 10 max
-          auditLogs: [newLog, ...(prev.auditLogs || [])].slice(0, 50) // Keep last 50 logs
-        };
+  const login = async (username: string, identifier: string) => {
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, pin: identifier })
       });
-      
-      return true;
+      if (response.ok) {
+        const data = await response.json();
+        if (data.user) {
+          const user = data.user;
+          setCurrentUser(user);
+          
+          // Auto-backup on login
+          setState(prev => {
+            const stateToSave = { ...prev, snapshots: undefined };
+            const newSnapshot = {
+              id: generateId(),
+              date: new Date().toISOString(),
+              note: `Automatski backup: Prijava korisnika ${user.username}`,
+              data: JSON.stringify(stateToSave)
+            };
+            
+            // Add audit log for login
+            const newLog: AuditLog = {
+              id: generateId(),
+              date: new Date().toISOString(),
+              userId: user.id,
+              username: user.username,
+              action: 'LOGIN',
+              entity: 'USER',
+              details: 'Uspješna prijava u sustav'
+            };
+            
+            return {
+              ...prev,
+              snapshots: [newSnapshot, ...(prev.snapshots || [])].slice(0, 10), // Keep 10 max
+              auditLogs: [newLog, ...(prev.auditLogs || [])].slice(0, 50) // Keep last 50 logs
+            };
+          });
+          
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn("Login failed via API", e);
     }
     return false;
   };
@@ -248,7 +313,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState(prev => {
       if (!currentUser) return prev;
       const newLog: AuditLog = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         date: new Date().toISOString(),
         userId: currentUser.id,
         username: currentUser.username,
@@ -276,23 +341,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return false;
   }, [currentUser]);
 
-  const updateMemberPin = (userId: string, newPin: string) => {
+  const updateMemberPin = async (userId: string, newPin: string) => {
+    const hashed = await hashPinStatic(newPin);
     setState(prev => ({
       ...prev,
-      users: prev.users.map(u => u.id === userId ? { ...u, pin: newPin } : u)
+      users: prev.users.map(u => u.id === userId ? { ...u, pin: hashed } : u)
     }));
     if (currentUser?.id === userId) {
-      setCurrentUser(prev => prev ? { ...prev, pin: newPin } : null);
+      setCurrentUser(prev => prev ? { ...prev, pin: hashed } : null);
     }
   };
 
-  const addUser = (name: string, pin: string) => {
+  const updateUserProfile = (userId: string, displayName: string, avatar: string) => {
+    setState(prev => ({
+      ...prev,
+      users: prev.users.map(u => u.id === userId ? { ...u, displayName, avatar } : u)
+    }));
+    if (currentUser?.id === userId) {
+      setCurrentUser(prev => prev ? { ...prev, displayName, avatar } : null);
+    }
+  };
+
+  const addUser = async (name: string, pin: string, permissions?: UserPermissions) => {
+    const hashed = await hashPinStatic(pin);
     const newUser: User = {
       id: Date.now().toString(),
       username: name,
-      pin,
+      pin: hashed,
       role: UserRole.MEMBER,
-      permissions: { ...DEFAULT_PERMISSIONS },
+      permissions: permissions || { ...DEFAULT_PERMISSIONS },
     };
     setState(prev => ({ ...prev, users: [...prev.users, newUser] }));
   };
@@ -304,10 +381,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const resetUserPin = (userId: string, newPin: string) => {
+  const resetUserPin = async (userId: string, newPin: string) => {
+    const hashed = await hashPinStatic(newPin);
     setState(prev => ({
       ...prev,
-      users: prev.users.map(u => u.id === userId ? { ...u, pin: newPin } : u)
+      users: prev.users.map(u => u.id === userId ? { ...u, pin: hashed } : u)
     }));
   };
 
@@ -353,14 +431,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           nextDeliveries[existingDeliveryIdx] = {
             ...nextDeliveries[existingDeliveryIdx],
             amount: material.deliveryCost,
-            name: `Dostava: ${material.name}`
+            name: `Dostava: ${material.name}`,
+            date: material.date
           };
         } else {
           nextDeliveries.push({
             id: `del-${material.id}`,
             name: `Dostava: ${material.name}`,
             amount: material.deliveryCost,
-            materialIds: [material.id]
+            materialIds: [material.id],
+            date: material.date
           });
         }
       } else {
@@ -379,14 +459,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           nextWorks[existingWorkIdx] = {
             ...nextWorks[existingWorkIdx],
             amount: material.workCost,
-            name: `Radovi: ${material.name}`
+            name: `Radovi: ${material.name}`,
+            date: material.date
           };
         } else {
           nextWorks.push({
             id: `work-${material.id}`,
             name: `Radovi: ${material.name}`,
             amount: material.workCost,
-            materialIds: [material.id]
+            materialIds: [material.id],
+            date: material.date
           });
         }
       } else {
@@ -397,22 +479,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // Handle Auto Saving
-      const savingAmount = material.plannedCost - material.actualPaid;
-      if (savingAmount !== 0) {
+      const savingAmountValue = material.savingAmount;
+      if (savingAmountValue !== 0 || material.hasSaving) {
         const existingSavingIdx = nextSavings.findIndex(s => s.materialId === material.id && s.isAuto);
         if (existingSavingIdx > -1) {
           nextSavings[existingSavingIdx] = {
             ...nextSavings[existingSavingIdx],
-            amount: savingAmount,
-            name: `Ušteda: ${material.name}`
+            amount: savingAmountValue,
+            name: `Ušteda: ${material.name}`,
+            note: material.savingNote
           };
         } else {
           nextSavings.push({
-            id: `sav-${material.id}`,
+            id: `sav-mat-${material.id}`,
             name: `Ušteda: ${material.name}`,
-            amount: savingAmount,
+            amount: savingAmountValue,
             materialId: material.id,
-            isAuto: true
+            isAuto: true,
+            note: material.savingNote
           });
         }
       } else {
@@ -429,8 +513,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addMaterial = (m: Omit<Material, 'id'>) => {
-    if (!hasWriteAccess('materijali')) return;
-    const id = Date.now().toString();
+    if (!hasWriteAccess('materijali')) return '';
+    const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
     const newMaterial = { ...m, id };
     setState(prev => ({
       ...prev,
@@ -438,6 +522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
     syncMaterialArtifacts(newMaterial);
     addAuditLog('CREATE', 'MATERIAL', `Dodan materijal: ${m.name}`);
+    return id;
   };
 
   const updateMaterial = (id: string, updates: Partial<Material>) => {
@@ -472,9 +557,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addDelivery = (d: Omit<Delivery, 'id'>) => {
-    if (!hasWriteAccess('dostava')) return;
-    setState(prev => ({ ...prev, deliveries: [...prev.deliveries, { ...d, id: `manual-${Date.now()}` }] }));
+    if (!hasWriteAccess('dostava')) return '';
+    const id = `manual-${Date.now()}`;
+    const newDel = { ...d, id };
+    setState(prev => ({ ...prev, deliveries: [...prev.deliveries, newDel] }));
+    syncDeliveryArtifacts(newDel);
     addAuditLog('CREATE', 'DELIVERY', `Dodana dostava: ${d.name}`);
+    return id;
   };
   const updateDelivery = (id: string, updates: Partial<Delivery>) => {
     const del = state.deliveries.find(d => d.id === id);
@@ -482,20 +571,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!hasWriteAccess('dostava')) return;
     
     setState(prev => ({ ...prev, deliveries: prev.deliveries.map(d => d.id === id ? { ...d, ...updates } : d) }));
-    addAuditLog('UPDATE', 'DELIVERY', `Ažurirana dostava: ${updates.name || id}`);
+    setTimeout(() => {
+      const latest = state.deliveries.find(d => d.id === id);
+      if (latest) syncDeliveryArtifacts(latest);
+      addAuditLog('UPDATE', 'DELIVERY', `Ažurirana dostava: ${updates.name || id}`);
+    }, 0);
   };
   const deleteDelivery = (id: string) => {
     const del = state.deliveries.find(d => d.id === id);
     if (!del) return;
     if (!hasWriteAccess('dostava')) return;
     
-    setState(prev => ({ ...prev, deliveries: prev.deliveries.filter(d => d.id !== id) }));
+    setState(prev => ({ 
+      ...prev, 
+      deliveries: prev.deliveries.filter(d => d.id !== id),
+      savings: prev.savings.filter(s => s.deliveryId !== id)
+    }));
     addAuditLog('DELETE', 'DELIVERY', `Obrisana dostava: ${del.name}`);
+  };
+
+  const syncDeliveryArtifacts = (del: Delivery) => {
+    setState(prev => {
+      let nextSavings = [...prev.savings];
+      const savingAmountValue = del.savingAmount || 0;
+      if (savingAmountValue !== 0 || del.hasSaving) {
+        const existingSavingIdx = nextSavings.findIndex(s => s.deliveryId === del.id && s.isAuto);
+        if (existingSavingIdx > -1) {
+          nextSavings[existingSavingIdx] = {
+            ...nextSavings[existingSavingIdx],
+            amount: savingAmountValue,
+            name: `Ušteda: ${del.name}`,
+            note: del.savingNote
+          };
+        } else {
+          nextSavings.push({
+            id: `sav-del-${del.id}`,
+            name: `Ušteda: ${del.name}`,
+            amount: savingAmountValue,
+            deliveryId: del.id,
+            isAuto: true,
+            note: del.savingNote
+          });
+        }
+      } else {
+        nextSavings = nextSavings.filter(s => s.deliveryId !== del.id);
+      }
+      return { ...prev, savings: nextSavings };
+    });
   };
 
   const addWork = (w: Omit<Work, 'id'>) => {
     if (!hasWriteAccess('radovi')) return;
-    setState(prev => ({ ...prev, works: [...prev.works, { ...w, id: `manual-${Date.now()}` }] }));
+    const id = `manual-${Date.now()}`;
+    const newWork = { ...w, id };
+    setState(prev => ({ ...prev, works: [...prev.works, newWork] }));
+    syncWorkArtifacts(newWork);
     addAuditLog('CREATE', 'WORK', `Dodani radovi: ${w.name}`);
   };
   const updateWork = (id: string, updates: Partial<Work>) => {
@@ -504,15 +634,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!hasWriteAccess('radovi')) return;
     
     setState(prev => ({ ...prev, works: prev.works.map(w => w.id === id ? { ...w, ...updates } : w) }));
-    addAuditLog('UPDATE', 'WORK', `Ažurirani radovi: ${updates.name || id}`);
+    setTimeout(() => {
+      const latest = state.works.find(w => w.id === id);
+      if (latest) syncWorkArtifacts(latest);
+      addAuditLog('UPDATE', 'WORK', `Ažurirani radovi: ${updates.name || id}`);
+    }, 0);
   };
   const deleteWork = (id: string) => {
     const work = state.works.find(w => w.id === id);
     if (!work) return;
     if (!hasWriteAccess('radovi')) return;
     
-    setState(prev => ({ ...prev, works: prev.works.filter(w => w.id !== id) }));
+    setState(prev => ({ 
+      ...prev, 
+      works: prev.works.filter(w => w.id !== id),
+      savings: prev.savings.filter(s => s.workId !== id)
+    }));
     addAuditLog('DELETE', 'WORK', `Obrisani radovi: ${work.name}`);
+  };
+
+  const syncWorkArtifacts = (work: Work) => {
+    setState(prev => {
+      let nextSavings = [...prev.savings];
+      const savingAmountValue = work.savingAmount;
+      if (savingAmountValue !== 0 || work.hasSaving) {
+        const existingSavingIdx = nextSavings.findIndex(s => s.workId === work.id && s.isAuto);
+        if (existingSavingIdx > -1) {
+          nextSavings[existingSavingIdx] = {
+            ...nextSavings[existingSavingIdx],
+            amount: savingAmountValue,
+            name: `Ušteda: ${work.name}`,
+            note: work.savingNote
+          };
+        } else {
+          nextSavings.push({
+            id: `sav-work-${work.id}`,
+            name: `Ušteda: ${work.name}`,
+            amount: savingAmountValue,
+            workId: work.id,
+            isAuto: true,
+            note: work.savingNote
+          });
+        }
+      } else {
+        nextSavings = nextSavings.filter(s => s.workId !== work.id);
+      }
+      return { ...prev, savings: nextSavings };
+    });
   };
 
   const addSaving = (s: Omit<Saving, 'id'>) => {
@@ -559,6 +727,95 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addAuditLog('DELETE', 'PAYMENT', `Obrisana uplata: ${payment.name}`);
   };
 
+  const addCredit = (c: Omit<Credit, 'id' | 'repayments'>) => {
+    if (!hasWriteAccess('kredit')) return;
+    setState(prev => ({ 
+      ...prev, 
+      credits: [...(prev.credits || []), { ...c, id: Date.now().toString(), repayments: [] }] 
+    }));
+    addAuditLog('CREATE', 'CREDIT', `Dodan kredit: ${c.name}`);
+  };
+  
+  const updateCredit = (id: string, updates: Partial<Credit>) => {
+    if (!hasWriteAccess('kredit')) return;
+    setState(prev => ({
+      ...prev,
+      credits: (prev.credits || []).map(c => c.id === id ? { ...c, ...updates } : c)
+    }));
+    addAuditLog('UPDATE', 'CREDIT', `Ažuriran kredit: ${id}`);
+  };
+  
+  const deleteCredit = (id: string) => {
+    if (!hasWriteAccess('kredit')) return;
+    setState(prev => ({
+      ...prev,
+      credits: (prev.credits || []).filter(c => c.id !== id)
+    }));
+    addAuditLog('DELETE', 'CREDIT', `Obrisan kredit: ${id}`);
+  };
+
+  const addRepayment = (creditId: string, amount: number, note?: string) => {
+    if (!hasWriteAccess('kredit')) return;
+    setState(prev => ({
+      ...prev,
+      credits: (prev.credits || []).map(c => {
+        if (c.id === creditId) {
+          return {
+            ...c,
+            repayments: [
+              ...c.repayments,
+              {
+                id: Date.now().toString(),
+                amount,
+                date: new Date().toISOString(),
+                status: 'PENDING',
+                note
+              }
+            ]
+          };
+        }
+        return c;
+      })
+    }));
+    addAuditLog('CREATE', 'CREDIT', `Dodana uplata za kredit: ${creditId}`);
+  };
+
+  const approveRepayment = (creditId: string, repaymentId: string, userId: string) => {
+    if (!currentUser || !currentUser.permissions.approveCredit) return;
+    setState(prev => ({
+      ...prev,
+      credits: (prev.credits || []).map(c => {
+        if (c.id === creditId) {
+          return {
+            ...c,
+            repayments: c.repayments.map(r => 
+              r.id === repaymentId ? { ...r, status: 'CONFIRMED', confirmedBy: userId } : r
+            )
+          };
+        }
+        return c;
+      })
+    }));
+    addAuditLog('UPDATE', 'CREDIT', `Uplata kredita odobrena: ${repaymentId}`);
+  };
+
+  const deleteRepayment = (creditId: string, repaymentId: string) => {
+    if (!hasWriteAccess('kredit')) return;
+    setState(prev => ({
+      ...prev,
+      credits: (prev.credits || []).map(c => {
+        if (c.id === creditId) {
+          return {
+            ...c,
+            repayments: c.repayments.filter(r => r.id !== repaymentId)
+          };
+        }
+        return c;
+      })
+    }));
+    addAuditLog('DELETE', 'CREDIT', `Obrisana uplata kredita: ${repaymentId}`);
+  };
+
   const setLoanTarget = (amount: number) => {
     if (!hasWriteAccess('kredit')) return;
     setState(prev => ({ ...prev, loanTarget: amount }));
@@ -570,7 +827,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const stateToSave = { ...state, snapshots: undefined };
     const data = JSON.stringify(stateToSave);
     const newSnapshot = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       date: new Date().toISOString(),
       note,
       data
@@ -585,6 +842,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState(prev => ({
       ...prev,
       snapshots: (prev.snapshots || []).filter(s => s.id !== id)
+    }));
+  };
+
+  const updateSettings = (settings: { geminiApiKey?: string }) => {
+    setState(prev => ({
+      ...prev,
+      settings: {
+        ...(prev.settings || {}),
+        ...settings
+      }
     }));
   };
 
@@ -608,7 +875,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      state, isLoading, syncStatus, currentUser, login, logout, updateMemberPin,
+      state, isLoading, syncStatus, currentUser, login, logout, updateMemberPin, updateUserProfile,
       addUser, updateUserPermissions, resetUserPin, deleteUser,
       addCategory, updateCategory, deleteCategory,
       addMaterial, updateMaterial, deleteMaterial,
@@ -616,8 +883,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addWork, updateWork, deleteWork,
       addSaving, updateSaving, deleteSaving,
       addPayment, updatePayment, deletePayment,
+      addCredit, updateCredit, deleteCredit, addRepayment, approveRepayment, deleteRepayment,
       setLoanTarget,
       createSnapshot, deleteSnapshot,
+      updateSettings,
       importData, exportData,
       addAuditLog,
       hasWriteAccess

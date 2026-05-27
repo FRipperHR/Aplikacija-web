@@ -68,8 +68,8 @@ export default function Backup() {
   return (
     <div className="space-y-8 pb-20">
       <header>
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Postavke i Backup</h1>
-        <p className="text-slate-500 mt-1 font-medium">Osigurajte svoje podatke i upravljajte ažuriranjima</p>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Postavke i Backup</h1>
+        <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Osigurajte svoje podatke i upravljajte ažuriranjima</p>
       </header>
 
       {status.type !== 'idle' && (
@@ -78,7 +78,7 @@ export default function Backup() {
           animate={{ opacity: 1, y: 0 }}
           className={cn(
             "p-6 rounded-3xl flex items-center gap-4 border sticky top-4 z-50 shadow-xl backdrop-blur-md",
-            status.type === 'success' ? "bg-emerald-50/90 border-emerald-100 text-emerald-700" : "bg-red-50/90 border-red-100 text-red-700"
+            status.type === 'success' ? "bg-emerald-50 dark:bg-emerald-500/10/90 border-emerald-100 text-emerald-700 dark:text-emerald-300" : "bg-red-50 dark:bg-red-500/10/90 border-red-100 text-red-700"
           )}
         >
           {status.type === 'success' ? <CheckCircle2 className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
@@ -89,41 +89,41 @@ export default function Backup() {
       {/* 1. Main Backup Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <motion.div 
-          className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center text-center group"
+          className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800/50 shadow-sm flex flex-col items-center text-center group"
         >
           <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4">
              <Download className="w-6 h-6" />
           </div>
-          <h2 className="text-lg font-bold text-slate-900 mb-1">Export podataka (Lokalni Backup)</h2>
-          <p className="text-slate-500 text-xs mb-6 max-w-xs">Preuzmite cijelu bazu u JSON formatu na svoje računalo ili spremite na USB eksterni disk.</p>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Export podataka (Lokalni Backup)</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs mb-6 max-w-xs">Preuzmite cijelu bazu u JSON formatu na svoje računalo ili spremite na USB eksterni disk.</p>
           <button onClick={handleExport} className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition-all font-bold">Spremi .JSON</button>
         </motion.div>
 
         <motion.div 
-          className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center text-center group"
+          className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800/50 shadow-sm flex flex-col items-center text-center group"
         >
-          <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center mb-4">
+          <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center mb-4">
              <Upload className="w-6 h-6" />
           </div>
-          <h2 className="text-lg font-bold text-slate-900 mb-1">Import podataka</h2>
-          <p className="text-slate-500 text-xs mb-6 max-w-xs">Učitajte .json datoteku. <strong>Trenutni podaci će biti spremljeni u snapshot.</strong></p>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Import podataka</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs mb-6 max-w-xs">Učitajte .json datoteku. <strong>Trenutni podaci će biti spremljeni u snapshot.</strong></p>
           <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" />
-          <button onClick={() => fileInputRef.current?.click()} className="w-full bg-slate-100 text-slate-700 font-bold py-3 rounded-xl hover:bg-slate-200 transition-all font-bold">Učitaj .JSON</button>
+          <button onClick={() => fileInputRef.current?.click()} className="w-full bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 font-bold py-3 rounded-xl hover:bg-slate-200 transition-all font-bold">Učitaj .JSON</button>
         </motion.div>
       </div>
 
       {/* 3. Snapshots / History */}
-      <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800/50 shadow-sm">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-amber-100 text-amber-700 rounded-2xl">
+            <div className="p-3 bg-amber-100 text-amber-700 dark:text-amber-300 rounded-2xl">
               <History className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-bold text-slate-900">Interna povijest (Mape u backupu)</h2>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Interna povijest (Mape u backupu)</h2>
           </div>
           <button 
             onClick={() => createSnapshot('Ručni snapshot')}
-            className="text-amber-700 bg-amber-50 px-4 py-2 rounded-xl font-bold text-sm hover:bg-amber-100 transition-all"
+            className="text-amber-700 dark:text-amber-300 bg-amber-50 px-4 py-2 rounded-xl font-bold text-sm hover:bg-amber-100 transition-all"
           >
             Spremi novo stanje
           </button>
@@ -131,18 +131,18 @@ export default function Backup() {
 
         <div className="space-y-3">
           {(!state.snapshots || state.snapshots.length === 0) ? (
-            <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 italic">
+            <div className="text-center py-12 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 italic">
                Nema spremljenih verzija u povijesti.
             </div>
           ) : (
             state.snapshots.map(s => (
-              <div key={s.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between group">
+              <div key={s.id} className="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800/50 rounded-2xl flex items-center justify-between group">
                 <div className="flex items-center gap-4">
-                  <div className="p-2 bg-white rounded-lg shadow-sm">
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded-lg shadow-sm">
                      <RefreshCcw className="w-4 h-4 text-slate-400 group-hover:rotate-180 transition-transform duration-500" />
                   </div>
                   <div>
-                    <p className="font-bold text-slate-900 text-sm">{s.note}</p>
+                    <p className="font-bold text-slate-900 dark:text-white text-sm">{s.note}</p>
                     <p className="text-xs text-slate-400">{new Date(s.date).toLocaleString('hr-HR')}</p>
                   </div>
                 </div>
@@ -155,7 +155,7 @@ export default function Backup() {
                   </button>
                   <button 
                     onClick={() => deleteSnapshot(s.id)}
-                    className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                    className="p-2 text-slate-300 hover:text-red-500 dark:text-red-400 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -173,7 +173,7 @@ export default function Backup() {
         </div>
         <div className="relative">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md">
+            <div className="p-3 bg-white dark:bg-slate-900/10 rounded-2xl backdrop-blur-md">
               <RefreshCcw className="w-6 h-6 text-amber-400" />
             </div>
             <h2 className="text-xl font-bold">Update Centar</h2>
@@ -201,7 +201,7 @@ export default function Backup() {
               </div>
             </div>
 
-            <div className="bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-sm self-start">
+            <div className="bg-white dark:bg-slate-900/5 p-6 rounded-2xl border border-white/10 backdrop-blur-sm self-start">
                <div className="flex items-center gap-2 text-amber-400 mb-4">
                   <AlertTriangle className="w-5 h-5" />
                   <p className="font-bold text-sm uppercase tracking-wider">Provjera za ažuriranje</p>
@@ -212,7 +212,7 @@ export default function Backup() {
                   setStatus({ type: 'success', message: 'Sustav je spreman za prihvat novih datoteka. Zamijenite datoteke na serveru i osvježite stranicu.' });
                   setTimeout(() => setStatus({ type: 'idle', message: '' }), 5000);
                 }}
-                className="w-full py-4 bg-white text-slate-900 font-black rounded-xl hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
+                className="w-full py-4 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-black rounded-xl hover:bg-slate-100 dark:bg-slate-800/50 transition-all flex items-center justify-center gap-2"
                >
                  Ažuriraj sustav (Update)
                </button>

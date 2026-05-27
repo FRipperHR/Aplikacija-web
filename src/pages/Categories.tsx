@@ -37,8 +37,8 @@ export default function Categories() {
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Kategorije</h1>
-          <p className="text-slate-500 mt-1 font-medium">Upravljajte grupama troškova i materijala</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Kategorije</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Upravljajte grupama troškova i materijala</p>
         </div>
         <button 
           onClick={handleOpenAdd}
@@ -49,18 +49,18 @@ export default function Categories() {
         </button>
       </header>
 
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col divide-y divide-slate-100">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/50 shadow-sm overflow-hidden flex flex-col divide-y divide-slate-100">
         {state.categories.map((c) => (
           <motion.div
             layout
             key={c.id}
-            className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors group"
+            className="flex items-center justify-between p-4 hover:bg-slate-50 dark:bg-slate-800 transition-colors group"
           >
              <div className="flex items-center gap-4">
-               <div className="p-2.5 bg-slate-100 text-slate-500 rounded-xl">
+               <div className="p-2.5 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 rounded-xl">
                   <Tags className="w-5 h-5" />
                </div>
-               <h3 className="font-bold text-slate-900">{c.name}</h3>
+               <h3 className="font-bold text-slate-900 dark:text-white">{c.name}</h3>
              </div>
             
             <div className="flex items-center gap-1">
@@ -73,7 +73,7 @@ export default function Categories() {
                </button>
                <button 
                   onClick={() => setConfirmDeleteId(c.id)} 
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  className="p-2 text-slate-400 hover:text-red-600 dark:text-red-400 hover:bg-red-50 dark:bg-red-500/10 rounded-lg transition-all"
                   title="Izbriši"
                >
                   <Trash2 className="w-4 h-4" />
@@ -105,11 +105,11 @@ export default function Categories() {
         {isModalOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl p-8 text-center">
-              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mx-auto mb-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 text-center">
+              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800/50 rounded-2xl flex items-center justify-center text-slate-400 mx-auto mb-4">
                  <Plus className="w-8 h-8" />
               </div>
-              <h2 className="text-xl font-bold text-slate-900 mb-6">{editingCategory ? 'Uredi kategoriju' : 'Nova kategorija'}</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6">{editingCategory ? 'Uredi kategoriju' : 'Nova kategorija'}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <input 
                   required 
@@ -117,10 +117,10 @@ export default function Categories() {
                   value={name} 
                   onChange={e => setName(e.target.value)} 
                   placeholder="npr. Spavaća soba"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-bold text-center" 
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-bold text-center" 
                 />
                 <div className="flex gap-3 pt-4">
-                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 border border-slate-200 text-slate-600 font-bold rounded-xl">Odustani</button>
+                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl">Odustani</button>
                    <button type="submit" className="flex-1 py-3 bg-slate-900 text-white font-bold rounded-xl">Spremi</button>
                 </div>
               </form>

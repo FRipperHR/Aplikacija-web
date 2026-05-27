@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Truck, Info, Package, Trash2, Plus, X, Edit2 } from 'lucide-react';
+import { Truck, Info, Package, Trash2, Plus, X, Edit2, PiggyBank } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { MultiSelect } from '../components/ui/MultiSelect';
@@ -16,12 +16,24 @@ export default function Delivery() {
   const [formData, setFormData] = useState<Omit<DeliveryType, 'id'>>({
     name: '',
     amount: 0,
-    materialIds: []
+    savingAmount: 0,
+    hasSaving: false,
+    savingNote: '',
+    materialIds: [],
+    date: new Date().toISOString().split('T')[0]
   });
 
   const handleOpenAdd = () => {
     setEditingId(null);
-    setFormData({ name: '', amount: 0, materialIds: [] });
+    setFormData({ 
+      name: '', 
+      amount: 0, 
+      savingAmount: 0, 
+      hasSaving: false, 
+      savingNote: '', 
+      materialIds: [],
+      date: new Date().toISOString().split('T')[0]
+    });
     setIsModalOpen(true);
   };
 
@@ -30,7 +42,11 @@ export default function Delivery() {
     setFormData({
       name: d.name,
       amount: d.amount,
-      materialIds: [...d.materialIds]
+      savingAmount: d.savingAmount || 0,
+      hasSaving: d.hasSaving || false,
+      savingNote: d.savingNote || '',
+      materialIds: [...d.materialIds],
+      date: d.date || new Date().toISOString().split('T')[0]
     });
     setIsModalOpen(true);
   };
@@ -49,8 +65,8 @@ export default function Delivery() {
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Dostava</h1>
-          <p className="text-slate-500 mt-1 font-medium">Pregled i upravljanje troškovima dostave</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Dostava</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Pregled i upravljanje troškovima dostave</p>
         </div>
         {canEdit && ( <button 
           onClick={handleOpenAdd}
@@ -63,24 +79,35 @@ export default function Delivery() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {state.deliveries.length === 0 ? (
-          <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200">
+          <div className="col-span-full py-20 text-center bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
              <Truck className="w-12 h-12 text-slate-200 mx-auto mb-4" />
              <p className="text-slate-400 italic">Nema evidentiranih dostava.</p>
           </div>
         ) : (
           state.deliveries.map((d) => {
+            const specificSavings = state.savings.filter(s => s.deliveryId === d.id);
+            const totalSaving = specificSavings.reduce((acc, s) => acc + s.amount, 0);
+            const neto = d.amount - totalSaving;
             const linkedMaterials = state.materials.filter(m => d.materialIds.includes(m.id));
             
             return (
               <motion.div 
                 layout
                 key={d.id}
-                className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group relative"
+                className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800/50 shadow-sm hover:shadow-md transition-all group relative"
               >
                 <div className="flex justify-between items-start mb-4">
                    <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
                       <Truck className="w-6 h-6" />
                    </div>
+                   <div className="absolute top-4 right-4">
+                    <span className={cn(
+                      "px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest",
+                      totalSaving > 0 ? "bg-emerald-100 text-emerald-700" : totalSaving < 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-400"
+                    )}>
+                      {totalSaving !== 0 ? `Ušteda: ${formatCurrency(totalSaving)}` : 'Nema uštede'}
+                    </span>
+                  </div>
                    {canEdit && (
                      <div className="flex items-center gap-2 transition-opacity">
                         <button 
@@ -91,7 +118,7 @@ export default function Delivery() {
                         </button>
                         <button 
                           onClick={() => setConfirmDeleteId(d.id)}
-                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          className="p-2 text-slate-400 hover:text-red-500 dark:text-red-400 hover:bg-red-50 dark:bg-red-500/10 rounded-lg transition-all"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -99,8 +126,19 @@ export default function Delivery() {
                    )}
                 </div>
                 
-                <h3 className="font-bold text-slate-900 mb-1">{d.name}</h3>
-                <div className="text-2xl font-black text-slate-900 mb-4">{formatCurrency(d.amount)}</div>
+                <h3 className="font-bold text-slate-900 dark:text-white mb-1">{d.name}</h3>
+                {d.note && <p className="text-[10px] text-slate-400 mb-2 truncate">{d.note}</p>}
+                
+                <div className="flex items-baseline gap-2 mb-4">
+                  <div className="text-2xl font-black text-slate-900 dark:text-white">
+                    {formatCurrency(neto)}
+                  </div>
+                  {totalSaving !== 0 && (
+                    <div className="text-xs text-slate-400 line-through">
+                      {formatCurrency(d.amount)}
+                    </div>
+                  )}
+                </div>
                 
                 <div className="pt-4 border-t border-slate-50">
                   <div className="flex items-center gap-2 mb-2 text-xs font-bold text-slate-400 uppercase tracking-widest">
@@ -109,7 +147,7 @@ export default function Delivery() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {linkedMaterials.length > 0 ? linkedMaterials.map(m => (
-                      <span key={m.id} className="inline-flex px-2 py-1 bg-slate-50 text-slate-600 rounded-md text-[10px] font-bold border border-slate-100">
+                      <span key={m.id} className="inline-flex px-2 py-1 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-md text-[10px] font-bold border border-slate-100 dark:border-slate-800/50">
                         {m.name}
                       </span>
                     )) : (
@@ -150,47 +188,108 @@ export default function Delivery() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden"
               onClick={e => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Truck className="w-6 h-6 text-blue-600" />
                   {editingId ? 'Uredi dostavu' : 'Nova dostava'}
                 </h3>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                  <X className="w-5 h-5 text-slate-500" />
+                  <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                 </button>
               </div>
 
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Naziv dostave</label>
-                  <input 
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    placeholder="npr. Dostava keramike i sanitarija"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Naziv dostave</label>
+                    <input 
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={e => setFormData({...formData, name: e.target.value})}
+                      placeholder="npr. Dostava keramike i sanitarija"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Datum</label>
+                    <input 
+                      type="date"
+                      required
+                      value={formData.date}
+                      onChange={e => setFormData({...formData, date: e.target.value})}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    />
+                  </div>
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Iznos (€)</label>
-                  <input 
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    required
-                    value={formData.amount || ''}
-                    onChange={e => setFormData({...formData, amount: parseFloat(e.target.value) || 0})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Cijena (€)</label>
+                    <input 
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      required
+                      value={formData.amount || ''}
+                      onChange={e => setFormData({...formData, amount: parseFloat(e.target.value) || 0})}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-col justify-end">
+                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Neto Investicija</p>
+                    <p className="text-lg font-black text-slate-900 dark:text-white">
+                      {formatCurrency(formData.amount - formData.savingAmount)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-50 dark:bg-emerald-500/10 p-4 rounded-xl space-y-4">
+                   <div className="flex items-center gap-2">
+                     <input 
+                       type="checkbox"
+                       id="delHasSaving"
+                       checked={formData.hasSaving}
+                       onChange={e => setFormData({...formData, hasSaving: e.target.checked})}
+                       className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                     />
+                     <label htmlFor="delHasSaving" className="text-sm font-bold text-emerald-900 dark:text-emerald-100 flex items-center gap-2">
+                       <PiggyBank className="w-4 h-4" />
+                       Ova dostava ima uštedu
+                     </label>
+                   </div>
+
+                   {formData.hasSaving && (
+                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-emerald-700 dark:text-emerald-400 mb-1 uppercase tracking-tighter">Iznos uštede (€)</label>
+                          <input 
+                            type="number" step="0.01"
+                            value={formData.savingAmount || ''}
+                            onChange={e => setFormData({...formData, savingAmount: parseFloat(e.target.value) || 0})}
+                            className="w-full bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2 text-sm font-bold text-emerald-900 dark:text-emerald-100"
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-emerald-700 dark:text-emerald-400 mb-1 uppercase tracking-tighter">Napomena o uštedi</label>
+                          <input 
+                            type="text"
+                            value={formData.savingNote || ''}
+                            onChange={e => setFormData({...formData, savingNote: e.target.value})}
+                            placeholder="Kako ste uštedjeli?"
+                            className="w-full bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2 text-sm text-emerald-900 dark:text-emerald-100"
+                          />
+                        </div>
+                     </motion.div>
+                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Poveznica s materijalima (opcionalno)</label>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Poveznica s materijalima (opcionalno)</label>
                   <MultiSelect 
                     options={state.materials}
                     selectedIds={formData.materialIds}
@@ -199,11 +298,22 @@ export default function Delivery() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Napomena (opcionalno)</label>
+                  <input 
+                    type="text"
+                    value={formData.note || ''}
+                    onChange={e => setFormData({...formData, note: e.target.value})}
+                    placeholder="siva mala slova će biti vidljiva..."
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-xs"
+                  />
+                </div>
+
                 <div className="pt-4 flex gap-3">
                   <button 
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-all"
+                    className="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:bg-slate-800 transition-all"
                   >
                     Odustani
                   </button>
